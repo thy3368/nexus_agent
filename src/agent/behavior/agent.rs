@@ -114,15 +114,7 @@ impl AgentBehavior for AgentBehaviorImpl {
             // REASON: Get model response with reasoning
             let response = self.get_model_response().await?;
 
-            // Check if task is complete (model says FINISH)
-            if ToolCallParser::is_complete(&response.content) {
-                tracing::info!("Task complete detected!");
-                // Add final response to history before returning
-                self.conversation_history.push(MMessage::assistant(response.content.clone()));
-                return Ok(self.create_result(true, response.content, tool_calls));
-            }
-
-            // ACT: Try to parse and execute tool call
+            // ACT: Try to parse and execute tool call FIRST (before checking FINISH)
             if let Some(tool_call) = ToolCallParser::parse(&response.content) {
                 let result = self.tool_executor.execute(tool_call.clone(), &self.config).await?;
 
@@ -145,6 +137,12 @@ impl AgentBehavior for AgentBehaviorImpl {
                 self.conversation_history.push(MMessage::user(observation));
 
                 // Continue loop - model will reason about the result
+            } else if ToolCallParser::is_complete(&response.content) {
+                // Check if task is complete (model says FINISH) - only if no tool call
+                tracing::info!("Task complete detected!");
+                // Add final response to history before returning
+                self.conversation_history.push(MMessage::assistant(response.content.clone()));
+                return Ok(self.create_result(true, response.content, tool_calls));
             } else {
                 // No valid tool call found - treat as free-form response
                 // Add to history and continue (model may refine or try again)
@@ -283,7 +281,7 @@ mod tests {
         // Step 2: Create Kimi provider
         let kimi_provider = crate::model::kimi::KimiProvider::new(
             api_key,
-            Some("moonshot-v1".to_string()),
+            Some("moonshot-v1-8k".to_string()),
         );
         let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
@@ -336,7 +334,7 @@ mod tests {
         let history = agent.get_conversation_history();
         println!("\n📝 Conversation history ({} messages):", history.len());
         for (i, msg) in history.iter().enumerate() {
-            println!("  [{}] {}: {}", i, msg.role, &msg.content[..msg.content.len().min(50)]);
+            println!("  [{}] {}: {}", i, msg.role, msg.content.chars().take(50).collect::<String>());
         }
     }
 
@@ -356,7 +354,7 @@ mod tests {
 
         let kimi_provider = crate::model::kimi::KimiProvider::new(
             api_key,
-            Some("moonshot-v1".to_string()),
+            Some("moonshot-v1-8k".to_string()),
         );
         let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
