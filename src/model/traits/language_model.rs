@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MMessage {
+pub struct AgentMessage {
     pub role: String,
     pub content: String,
 }
 
-impl MMessage {
+impl AgentMessage {
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: "system".to_string(),
@@ -69,12 +69,12 @@ pub trait LanguageModel: Send + Sync {
     ) -> crate::Result<ModelResponse>;
 
     /// Generate a chat completion
-    async fn chat(&self, messages: &[MMessage]) -> crate::Result<ModelResponse>;
+    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelResponse>;
 
     /// Generate a chat completion with tool support
     async fn chat_with_tools(
         &self,
-        messages: &[MMessage],
+        messages: &[AgentMessage],
         tools: &[ToolDefinition],
     ) -> crate::Result<ModelResponse>;
 
@@ -104,11 +104,11 @@ mod tests {
 
     #[test]
     fn test_message_creation() {
-        let msg = MMessage::user("Hello");
+        let msg = AgentMessage::user("Hello");
         assert_eq!(msg.role, "user");
         assert_eq!(msg.content, "Hello");
 
-        let sys = MMessage::system("System prompt");
+        let sys = AgentMessage::system("System prompt");
         assert_eq!(sys.role, "system");
     }
 }

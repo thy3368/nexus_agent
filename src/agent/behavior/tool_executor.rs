@@ -10,7 +10,13 @@ use crate::safety::SafetyValidator;
 use crate::tools::{ToolContext, ToolRegistry};
 
 use super::context_provider::ContextProvider;
-use super::tool_parser::ParsedToolCall;
+
+#[derive(Debug, Clone)]
+pub struct ToolCall {
+    pub name: String,
+    pub args: serde_json::Value,
+}
+
 
 #[derive(Debug, Clone)]
 pub struct ToolExecutionResult {
@@ -41,7 +47,7 @@ impl ToolExecutor {
     }
 
     /// Execute a tool call with permission and safety checks
-    pub async fn execute(&self, tool_call: ParsedToolCall, config: &Config) -> Result<ToolExecutionResult> {
+    pub async fn execute(&self, tool_call: ToolCall, config: &Config) -> Result<ToolExecutionResult> {
         tracing::info!("Executing tool: {}", tool_call.name);
 
         // Check permission

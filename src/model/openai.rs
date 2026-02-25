@@ -2,7 +2,7 @@
 
 use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 
 pub struct OpenAIProvider {
@@ -31,7 +31,7 @@ impl OpenAIProvider {
         self
     }
 
-    fn convert_message(&self, msg: &MMessage) -> async_openai::types::ChatCompletionRequestMessage {
+    fn convert_message(&self, msg: &AgentMessage) -> async_openai::types::ChatCompletionRequestMessage {
         use async_openai::types::*;
 
         match msg.role.as_str() {
@@ -70,15 +70,15 @@ impl LanguageModel for OpenAIProvider {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
-            messages.push(MMessage::system(sys));
+            messages.push(AgentMessage::system(sys));
         }
 
-        messages.push(MMessage::user(prompt));
+        messages.push(AgentMessage::user(prompt));
 
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
         use async_openai::types::*;
 
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
@@ -126,7 +126,7 @@ impl LanguageModel for OpenAIProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[MMessage],
+        messages: &[AgentMessage],
         _tools: &[ToolDefinition],
     ) -> Result<ModelResponse> {
         // For MVP, we'll use regular chat
@@ -171,7 +171,7 @@ mod tests {
     fn test_message_conversion() {
         let provider = OpenAIProvider::new("test-key".to_string(), None);
 
-        let msg = MMessage::user("Hello");
+        let msg = AgentMessage::user("Hello");
         let _converted = provider.convert_message(&msg);
 
         // Just testing that conversion doesn't panic

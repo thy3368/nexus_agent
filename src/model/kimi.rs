@@ -1,5 +1,5 @@
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
 use crate::model::{ModelInfo, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -74,13 +74,13 @@ impl LanguageModel for KimiProvider {
     async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(MMessage::system(sys));
+            messages.push(AgentMessage::system(sys));
         }
-        messages.push(MMessage::user(prompt));
+        messages.push(AgentMessage::user(prompt));
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
         let url = "https://api.moonshot.cn/v1/chat/completions";
 
         let kimi_messages: Vec<KimiMessage> = messages
@@ -145,7 +145,7 @@ impl LanguageModel for KimiProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[MMessage],
+        messages: &[AgentMessage],
         _tools: &[ToolDefinition],
     ) -> Result<ModelResponse> {
         // For MVP, use regular chat without tool support
@@ -197,9 +197,9 @@ mod tests {
     #[tokio::test]
     async fn test_kimi_message_conversion() {
         let messages = vec![
-            MMessage::system("You are a helpful assistant"),
-            MMessage::user("Hello"),
-            MMessage::assistant("Hi there!"),
+            AgentMessage::system("You are a helpful assistant"),
+            AgentMessage::user("Hello"),
+            AgentMessage::assistant("Hi there!"),
         ];
 
         let kimi_messages: Vec<KimiMessage> = messages
@@ -224,7 +224,7 @@ mod tests {
 
         let provider = KimiProvider::new(api_key, Some("moonshot-v1".to_string()));
 
-        let messages = vec![MMessage::user("你好，请用一句话介绍你自己")];
+        let messages = vec![AgentMessage::user("你好，请用一句话介绍你自己")];
 
         let response = provider.chat(&messages).await;
 

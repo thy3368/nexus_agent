@@ -35,7 +35,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::model::ModelInfo;
-    use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+    use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
     use crate::permissions::PermissionManager;
     use crate::tools::ToolRegistry;
 
@@ -50,7 +50,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn chat(&self, _: &[MMessage]) -> error::Result<ModelResponse> {
+        async fn chat(&self, _: &[AgentMessage]) -> error::Result<ModelResponse> {
             let mut count = self.call_count.lock().unwrap();
             let response = self.responses[*count].clone();
             *count += 1;
@@ -66,7 +66,7 @@ mod tests {
 
         async fn chat_with_tools(
             &self,
-            messages: &[MMessage],
+            messages: &[AgentMessage],
             _: &[crate::model::ToolDefinition],
         ) -> error::Result<ModelResponse> {
             self.chat(messages).await

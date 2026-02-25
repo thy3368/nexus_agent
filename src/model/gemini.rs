@@ -2,7 +2,7 @@
 
 use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -31,7 +31,7 @@ impl GeminiProvider {
         self
     }
 
-    fn convert_messages(&self, messages: &[MMessage]) -> Vec<serde_json::Value> {
+    fn convert_messages(&self, messages: &[AgentMessage]) -> Vec<serde_json::Value> {
         let mut parts = Vec::new();
 
         for msg in messages {
@@ -59,15 +59,15 @@ impl LanguageModel for GeminiProvider {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
-            messages.push(MMessage::system(sys));
+            messages.push(AgentMessage::system(sys));
         }
 
-        messages.push(MMessage::user(prompt));
+        messages.push(AgentMessage::user(prompt));
 
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -135,7 +135,7 @@ impl LanguageModel for GeminiProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[MMessage],
+        messages: &[AgentMessage],
         _tools: &[ToolDefinition],
     ) -> Result<ModelResponse> {
         // For MVP, use regular chat
@@ -180,9 +180,9 @@ mod tests {
         let provider = GeminiProvider::new("test-key".to_string(), None);
 
         let messages = vec![
-            MMessage::system("You are helpful"),
-            MMessage::user("Hello"),
-            MMessage::assistant("Hi there"),
+            AgentMessage::system("You are helpful"),
+            AgentMessage::user("Hello"),
+            AgentMessage::assistant("Hi there"),
         ];
 
         let converted = provider.convert_messages(&messages);

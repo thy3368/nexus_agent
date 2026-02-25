@@ -1,5 +1,5 @@
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -41,7 +41,7 @@ struct OllamaMessage {
 
 #[async_trait]
 impl LanguageModel for OllamaProvider {
-    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
         let url = format!("{}/api/chat", self.base_url);
 
         // Debug logging
@@ -107,15 +107,15 @@ impl LanguageModel for OllamaProvider {
     async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(MMessage::system(sys));
+            messages.push(AgentMessage::system(sys));
         }
-        messages.push(MMessage::user(prompt));
+        messages.push(AgentMessage::user(prompt));
         self.chat(&messages).await
     }
 
     async fn chat_with_tools(
         &self,
-        messages: &[MMessage],
+        messages: &[AgentMessage],
         _tools: &[crate::model::ToolDefinition],
     ) -> Result<ModelResponse> {
         // For now, just ignore tools and chat normally

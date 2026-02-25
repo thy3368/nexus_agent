@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::model::traits::language_model::MMessage;
+use crate::model::traits::language_model::AgentMessage;
 
 /// Agent execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,11 +20,11 @@ pub trait AgentBehavior: Send + Sync {
     fn format_response(&self, content: &str) -> String;
 
     /// Get conversation history (read-only)
-    fn get_conversation_history(&self) -> &[MMessage];
+    fn get_conversation_history(&self) -> &[AgentMessage];
 
     /// Clear conversation history
     fn clear_conversation_history(&mut self);
 
     /// Add message to conversation history
-    fn add_to_history(&mut self, message: MMessage);
+    fn add_to_history(&mut self, message: AgentMessage);
 }
