@@ -14,6 +14,7 @@ pub mod permissions;
 pub mod prompt;
 pub mod repl;
 pub mod safety;
+pub mod setup;
 pub mod tools;
 pub mod util;
 

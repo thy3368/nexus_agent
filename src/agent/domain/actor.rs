@@ -4,7 +4,7 @@
 use kameo::message::{Context, Message};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::domain::agent::{Agent, AgentResult};
+use crate::agent::behavior::agent::{AgentBehavior, AgentBehaviorImpl, AgentResult};
 use crate::error;
 
 /// Message for executing a task asynchronously via Actor
@@ -12,7 +12,7 @@ use crate::error;
 pub struct RunTaskCmd(pub String);
 
 /// Handler for asynchronous task execution
-impl Message<RunTaskCmd> for Agent {
+impl Message<RunTaskCmd> for AgentBehaviorImpl {
     type Reply = crate::Result<AgentResult>;
 
     async fn handle(
@@ -94,10 +94,10 @@ mod tests {
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = Agent::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
+        let agent = AgentBehaviorImpl::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
 
         // Spawn the actor using kameo's spawn method
-        let actor_ref = Agent::spawn(agent);
+        let actor_ref = AgentBehaviorImpl::spawn(agent);
 
         // Send message and await response
         let result = actor_ref.ask(RunTaskCmd("test task".to_string())).await.unwrap();
@@ -124,10 +124,10 @@ mod tests {
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = Agent::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
+        let agent = AgentBehaviorImpl::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
 
         // Spawn the actor using kameo's spawn method
-        let actor_ref = Agent::spawn(agent);
+        let actor_ref = AgentBehaviorImpl::spawn(agent);
 
         // Send message and await response
         let result = actor_ref.ask(RunTaskCmd("List the files and size in".to_string())).await.unwrap();

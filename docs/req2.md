@@ -6,3 +6,11 @@
 - llm_command,llm_result,tool_command,tool_result,state[global/session/etc] 文件/数据库等
 - 交互 cli/聊天工具/http/websocket.
 - https://docs.openclaw.ai/zh-CN/install 参考功能文档
+
+
+
+# 结构
+
+- 入站 handler
+- 应用服务 输入command；多个handler
+- 

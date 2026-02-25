@@ -7,5 +7,7 @@
 
 pub mod domain;
 
+pub mod behavior;
+
 // Re-export domain types for public API
 
