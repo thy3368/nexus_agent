@@ -2,7 +2,7 @@
 
 use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -55,7 +55,7 @@ impl GeminiProvider {
 
 #[async_trait]
 impl LanguageModel for GeminiProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
@@ -67,7 +67,7 @@ impl LanguageModel for GeminiProvider {
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -122,7 +122,7 @@ impl LanguageModel for GeminiProvider {
             TokenUsage::default()
         };
 
-        Ok(ModelResponse {
+        Ok(ModelReply {
             content,
             model: self.model.clone(),
             usage,
@@ -137,7 +137,7 @@ impl LanguageModel for GeminiProvider {
         &self,
         messages: &[AgentMessage],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelResponse> {
+    ) -> Result<ModelReply> {
         // For MVP, use regular chat
         // Gemini supports function calling but we'll implement it in Phase 2
         self.chat(messages).await

@@ -2,7 +2,7 @@
 
 use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
 use async_trait::async_trait;
 
 pub struct OpenAIProvider {
@@ -66,7 +66,7 @@ impl OpenAIProvider {
 
 #[async_trait]
 impl LanguageModel for OpenAIProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
@@ -78,7 +78,7 @@ impl LanguageModel for OpenAIProvider {
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
         use async_openai::types::*;
 
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
@@ -115,7 +115,7 @@ impl LanguageModel for OpenAIProvider {
             TokenUsage::default()
         };
 
-        Ok(ModelResponse {
+        Ok(ModelReply {
             content,
             model: response.model,
             usage,
@@ -128,7 +128,7 @@ impl LanguageModel for OpenAIProvider {
         &self,
         messages: &[AgentMessage],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelResponse> {
+    ) -> Result<ModelReply> {
         // For MVP, we'll use regular chat
         // Phase 2 will add proper function calling support
         self.chat(messages).await

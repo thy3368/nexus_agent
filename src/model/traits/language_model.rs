@@ -50,7 +50,7 @@ pub struct ToolCall {
 
 /// Model response
 #[derive(Debug, Clone)]
-pub struct ModelResponse {
+pub struct ModelReply {
     pub content: String,
     pub model: String,
     pub usage: TokenUsage,
@@ -66,17 +66,17 @@ pub trait LanguageModel: Send + Sync {
         &self,
         prompt: &str,
         system_prompt: Option<&str>,
-    ) -> crate::Result<ModelResponse>;
+    ) -> crate::Result<ModelReply>;
 
     /// Generate a chat completion
-    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelResponse>;
+    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply>;
 
     /// Generate a chat completion with tool support
     async fn chat_with_tools(
         &self,
         messages: &[AgentMessage],
         tools: &[ToolDefinition],
-    ) -> crate::Result<ModelResponse>;
+    ) -> crate::Result<ModelReply>;
 
     /// Get model information
     fn model_info(&self) -> ModelInfo;

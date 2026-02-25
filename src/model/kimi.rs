@@ -1,5 +1,5 @@
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelResponse, TokenUsage};
+use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
 use crate::model::{ModelInfo, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -71,7 +71,7 @@ struct KimiUsage {
 
 #[async_trait]
 impl LanguageModel for KimiProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
             messages.push(AgentMessage::system(sys));
@@ -80,7 +80,7 @@ impl LanguageModel for KimiProvider {
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
         let url = "https://api.moonshot.cn/v1/chat/completions";
 
         let kimi_messages: Vec<KimiMessage> = messages
@@ -130,7 +130,7 @@ impl LanguageModel for KimiProvider {
             .first()
             .ok_or_else(|| ModelError::InvalidResponse("No choices in response".to_string()))?;
 
-        Ok(ModelResponse {
+        Ok(ModelReply {
             content: choice.message.content.clone(),
             model: kimi_resp.model,
             usage: TokenUsage {
@@ -147,7 +147,7 @@ impl LanguageModel for KimiProvider {
         &self,
         messages: &[AgentMessage],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelResponse> {
+    ) -> Result<ModelReply> {
         // For MVP, use regular chat without tool support
         self.chat(messages).await
     }
