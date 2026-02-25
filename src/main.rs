@@ -38,9 +38,6 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Doctor) => {
             handlers::handle_doctor(&config)?;
         }
-        Some(Commands::Plan { task }) => {
-            handlers::handle_plan(&task, config).await?;
-        }
         Some(Commands::Agent { task }) => {
             handlers::handle_agent(&task, config).await?;
         }

@@ -1,5 +1,5 @@
-use crate::error::{Result, ModelError};
-use crate::model::{LanguageModel, ModelResponse};
+use crate::error::{ModelError, Result};
+use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -13,7 +13,11 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
-    pub fn new(base_url: Option<String>, api_key: Option<String>, default_model: Option<String>) -> Self {
+    pub fn new(
+        base_url: Option<String>,
+        api_key: Option<String>,
+        default_model: Option<String>,
+    ) -> Self {
         Self {
             client: Client::new(),
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
@@ -37,9 +41,9 @@ struct OllamaMessage {
 
 #[async_trait]
 impl LanguageModel for OllamaProvider {
-    async fn chat(&self, messages: &[crate::model::MMessage]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
         let url = format!("{}/api/chat", self.base_url);
-        
+
         // Debug logging
         if let Some(key) = &self.api_key {
             let masked_key = if key.len() > 4 {
@@ -47,9 +51,18 @@ impl LanguageModel for OllamaProvider {
             } else {
                 "***".to_string()
             };
-            tracing::info!("Ollama Chat: URL={}, Key={}, Model={}", url, masked_key, self.default_model);
+            tracing::info!(
+                "Ollama Chat: URL={}, Key={}, Model={}",
+                url,
+                masked_key,
+                self.default_model
+            );
         } else {
-            tracing::info!("Ollama Chat: URL={}, Key=None, Model={}", url, self.default_model);
+            tracing::info!(
+                "Ollama Chat: URL={}, Key=None, Model={}",
+                url,
+                self.default_model
+            );
         }
 
         let mut ollama_messages = Vec::new();
@@ -60,21 +73,23 @@ impl LanguageModel for OllamaProvider {
             }));
         }
 
-        let mut request = self.client.post(&url)
-            .json(&json!({
-                "model": self.default_model,
-                "messages": ollama_messages,
-                "stream": false
-            }));
+        let mut request = self.client.post(&url).json(&json!({
+            "model": self.default_model,
+            "messages": ollama_messages,
+            "stream": false
+        }));
 
         if let Some(key) = &self.api_key {
             request = request.header("Authorization", format!("Bearer {}", key));
         }
 
         let response = request.send().await.map_err(ModelError::Request)?;
-        
+
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(ModelError::Api(format!("Ollama API error: {}", error_text)).into());
         }
 
@@ -83,7 +98,7 @@ impl LanguageModel for OllamaProvider {
         Ok(ModelResponse {
             content: ollama_resp.message.content,
             model: self.default_model.clone(),
-            usage: crate::model::TokenUsage::default(), // Ollama usage not parsed yet
+            usage: TokenUsage::default(), // Ollama usage not parsed yet
             tool_calls: None,
             finish_reason: Some("stop".to_string()),
         })
@@ -92,15 +107,15 @@ impl LanguageModel for OllamaProvider {
     async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(crate::model::MMessage::system(sys));
+            messages.push(MMessage::system(sys));
         }
-        messages.push(crate::model::MMessage::user(prompt));
+        messages.push(MMessage::user(prompt));
         self.chat(&messages).await
     }
 
     async fn chat_with_tools(
         &self,
-        messages: &[crate::model::MMessage],
+        messages: &[MMessage],
         _tools: &[crate::model::ToolDefinition],
     ) -> Result<ModelResponse> {
         // For now, just ignore tools and chat normally

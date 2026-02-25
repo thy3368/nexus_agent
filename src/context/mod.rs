@@ -1,7 +1,7 @@
 //! Context management for PromptLine
 
 use crate::error::Result;
-use crate::model::MMessage;
+use crate::model::traits::language_model::MMessage;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -76,9 +76,12 @@ impl ContextManager {
             Ok("Rust".to_string())
         } else if current_dir.join("package.json").exists() {
             Ok("Node.js".to_string())
-        } else if current_dir.join("requirements.txt").exists() || current_dir.join("pyproject.toml").exists() {
+        } else if current_dir.join("requirements.txt").exists()
+            || current_dir.join("pyproject.toml").exists()
+        {
             Ok("Python".to_string())
-        } else if current_dir.join("pom.xml").exists() || current_dir.join("build.gradle").exists() {
+        } else if current_dir.join("pom.xml").exists() || current_dir.join("build.gradle").exists()
+        {
             Ok("Java/Gradle".to_string())
         } else {
             Ok("Generic".to_string())
@@ -94,12 +97,11 @@ mod tests {
     #[tokio::test]
     async fn test_history_persistence() {
         let temp_dir = tempdir().unwrap();
-        let manager = ContextManager { context_dir: temp_dir.path().to_path_buf() };
+        let manager = ContextManager {
+            context_dir: temp_dir.path().to_path_buf(),
+        };
 
-        let messages = vec![
-            MMessage::user("Hello"),
-            MMessage::assistant("Hi there"),
-        ];
+        let messages = vec![MMessage::user("Hello"), MMessage::assistant("Hi there")];
 
         // Save history
         manager.save_history(&messages).await.unwrap();

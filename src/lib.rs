@@ -23,7 +23,6 @@ pub mod inbound_adapter;
 // Re-export commonly used types
 pub use config::Config;
 pub use error::{PromptLineError, Result};
-pub use model::{LanguageModel, ModelResponse};
 pub use tools::{Tool, ToolResult};
 
 /// Library version
@@ -33,6 +32,5 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use crate::config::Config;
     pub use crate::error::{PromptLineError, Result};
-    pub use crate::model::{LanguageModel, ModelResponse};
     pub use crate::tools::{Tool, ToolResult};
 }

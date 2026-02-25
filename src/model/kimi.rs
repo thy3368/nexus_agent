@@ -1,6 +1,7 @@
+use crate::error::{ModelError, Result};
+use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
+use crate::model::{ModelInfo, ToolDefinition};
 use async_trait::async_trait;
-use crate::error::{Result, ModelError};
-use crate::model::{LanguageModel, ModelResponse, MMessage, ModelInfo, ToolDefinition, TokenUsage};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -122,10 +123,7 @@ impl LanguageModel for KimiProvider {
             return Err(ModelError::Api(format!("Kimi API error: {}", error_text)).into());
         }
 
-        let kimi_resp: KimiResponse = response
-            .json()
-            .await
-            .map_err(|e| ModelError::Request(e))?;
+        let kimi_resp: KimiResponse = response.json().await.map_err(|e| ModelError::Request(e))?;
 
         let choice = kimi_resp
             .choices
@@ -181,8 +179,7 @@ mod tests {
 
     #[test]
     fn test_kimi_provider_with_params() {
-        let provider = KimiProvider::new("test-key".to_string(), None)
-            .with_params(0.5, 2048);
+        let provider = KimiProvider::new("test-key".to_string(), None).with_params(0.5, 2048);
 
         assert_eq!(provider.temperature, 0.5);
         assert_eq!(provider.max_tokens, 2048);
@@ -227,9 +224,7 @@ mod tests {
 
         let provider = KimiProvider::new(api_key, Some("moonshot-v1".to_string()));
 
-        let messages = vec![
-            MMessage::user("你好，请用一句话介绍你自己"),
-        ];
+        let messages = vec![MMessage::user("你好，请用一句话介绍你自己")];
 
         let response = provider.chat(&messages).await;
 
@@ -238,10 +233,9 @@ mod tests {
                 println!("\n✓ Kimi API call successful!");
                 println!("  Model: {}", resp.model);
                 println!("  Content: {}", resp.content);
-                println!("  Tokens - Prompt: {}, Completion: {}, Total: {}",
-                    resp.usage.prompt_tokens,
-                    resp.usage.completion_tokens,
-                    resp.usage.total_tokens
+                println!(
+                    "  Tokens - Prompt: {}, Completion: {}, Total: {}",
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens, resp.usage.total_tokens
                 );
                 println!("  Finish reason: {:?}", resp.finish_reason);
                 assert!(!resp.content.is_empty());
@@ -260,16 +254,21 @@ mod tests {
 
         let provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
 
-        let response = provider.complete(
-            "写一个Rust的Hello World程序",
-            Some("你是一个有帮助的编程助手")
-        ).await;
+        let response = provider
+            .complete(
+                "写一个Rust的Hello World程序",
+                Some("你是一个有帮助的编程助手"),
+            )
+            .await;
 
         match response {
             Ok(resp) => {
                 println!("\n✓ Kimi complete call successful!");
                 println!("  Content length: {}", resp.content.len());
-                println!("  First 100 chars: {}", &resp.content[..resp.content.len().min(100)]);
+                println!(
+                    "  First 100 chars: {}",
+                    &resp.content[..resp.content.len().min(100)]
+                );
                 assert!(!resp.content.is_empty());
             }
             Err(e) => {

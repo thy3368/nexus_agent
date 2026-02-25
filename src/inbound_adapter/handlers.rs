@@ -1,18 +1,16 @@
-use crate::agent::behavior::agent::{AgentBehavior, AgentBehaviorImpl};
-use crate::Config;
-use crate::setup;
-use std::io::{self, Write};
-
 use super::repl_session::ReplSession;
+use crate::agent::behavior::agent::AgentBehaviorImpl;
+use crate::agent::behavior::AgentBehavior;
+use crate::setup;
+use crate::Config;
 
 pub async fn handle_init() -> anyhow::Result<()> {
     println!("🚀 Initializing PromptLine...\n");
 
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .unwrap_or_else(|_| {
-            println!("⚠️  OPENAI_API_KEY environment variable not set");
-            String::new()
-        });
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+        println!("⚠️  OPENAI_API_KEY environment variable not set");
+        String::new()
+    });
 
     if api_key.is_empty() {
         println!("To use OpenAI models, set your API key:");
@@ -65,16 +63,6 @@ pub fn handle_doctor(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-//todo remove handle_plan
-pub async fn handle_plan(task: &str, _config: Config) -> anyhow::Result<()> {
-    println!("🤔 Planning mode (read-only)\n");
-    println!("Task: {}", task);
-    println!("\nThis is a placeholder for plan mode.");
-    println!("Phase 1 MVP will implement the agent loop.");
-
-    Ok(())
-}
-
 pub async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
     println!("⚙️  Agent mode\n");
 
@@ -82,7 +70,8 @@ pub async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
     let tools = setup::create_tools();
     let permission_manager = setup::create_permission_manager()?;
 
-    let mut agent = AgentBehaviorImpl::new(model, tools, config, Vec::new(), permission_manager).await?;
+    let mut agent =
+        AgentBehaviorImpl::new(model, tools, config, Vec::new(), permission_manager).await?;
 
     println!("Task: {}\n", task);
     let result = agent.execute_task(task.to_string()).await?;

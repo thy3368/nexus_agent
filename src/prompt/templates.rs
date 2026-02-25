@@ -1,6 +1,7 @@
 //! Prompt template management
 
-use crate::error::{Result, PromptLineError};
+use crate::error::{PromptLineError, Result};
+use crate::model::traits::language_model::MMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -14,7 +15,7 @@ pub struct PromptTemplate {
     pub description: String,
     pub template: String,
     pub variables: HashMap<String, String>,
-    pub few_shot_examples: Option<Vec<crate::model::MMessage>>,
+    pub few_shot_examples: Option<Vec<MMessage>>,
 }
 
 pub struct TemplateManager {
@@ -50,10 +51,19 @@ impl TemplateManager {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+            if path.is_file()
+                && path
+                    .extension()
+                    .map_or(false, |ext| ext == "yaml" || ext == "yml")
+            {
                 let content = fs::read_to_string(&path).await?;
-                let template: PromptTemplate = serde_yaml::from_str(&content)
-                    .map_err(|e| PromptLineError::Config(crate::error::ConfigError::Invalid(format!("Failed to parse template {}: {}", path.display(), e))))?;
+                let template: PromptTemplate = serde_yaml::from_str(&content).map_err(|e| {
+                    PromptLineError::Config(crate::error::ConfigError::Invalid(format!(
+                        "Failed to parse template {}: {}",
+                        path.display(),
+                        e
+                    )))
+                })?;
                 self.templates.insert(template.name.clone(), template);
             }
         }
@@ -88,7 +98,9 @@ template: "Hello, {{name}}!"
 variables:
   name: "world"
         "#;
-        fs::write(templates_path.join("test_template.yaml"), template_content).await.unwrap();
+        fs::write(templates_path.join("test_template.yaml"), template_content)
+            .await
+            .unwrap();
 
         let _manager = TemplateManager::new().await.unwrap();
         // Override templates_dir for test
@@ -97,7 +109,6 @@ variables:
             templates: HashMap::new(),
         };
         manager.load_templates().await.unwrap();
-
 
         let template = manager.get_template("test_template").unwrap();
         assert_eq!(template.name, "test_template");

@@ -4,47 +4,20 @@ use std::sync::{Arc, Mutex};
 
 use kameo::Actor;
 use serde::{Deserialize, Serialize};
-
+use crate::agent::behavior::traits::agent_behavior::{AgentBehavior, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
 use crate::formatter::ResponseFormatter;
 use crate::loading::LoadingIndicator;
-use crate::model::{LanguageModel, MMessage};
+use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse};
 use crate::permissions::PermissionManager;
 use crate::tools::ToolRegistry;
 
-use super::context_provider::ContextProvider;
 use super::prompt_builder::SystemPromptBuilder;
 use super::tool_executor::ToolExecutor;
-use super::tool_parser::{ParsedToolCall, ToolCallParser};
+use super::tool_parser::ToolCallParser;
 
-/// Agent execution result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentResult {
-    pub success: bool,
-    pub output: String,
-    pub iterations: usize,
-    pub tool_calls: Vec<String>,
-}
 
-/// Agent behavior trait - defines Use Case layer interface
-#[async_trait::async_trait]
-pub trait AgentBehavior: Send + Sync {
-    /// Execute a task using ReACT loop
-    async fn execute_task(&mut self, task: String) -> Result<AgentResult>;
-
-    /// Format response for display
-    fn format_response(&self, content: &str) -> String;
-
-    /// Get conversation history (read-only)
-    fn get_conversation_history(&self) -> &[MMessage];
-
-    /// Clear conversation history
-    fn clear_conversation_history(&mut self);
-
-    /// Add message to conversation history
-    fn add_to_history(&mut self, message: MMessage);
-}
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
@@ -100,41 +73,13 @@ impl AgentBehaviorImpl {
     }
 
     /// Get model response with loading indicator
-    async fn get_model_response(&self) -> Result<crate::model::ModelResponse> {
+    async fn get_model_response(&self) -> Result<ModelResponse> {
         let mut loading = LoadingIndicator::new();
         loading.start();
         let response = self.model.chat(&self.conversation_history).await?;
         loading.stop().await;
         tracing::info!("Response content: {:?}", response.content);
         Ok(response)
-    }
-
-    /// Handle tool call execution and update conversation
-    async fn handle_tool_call(
-        &mut self,
-        tool_call: &ParsedToolCall,
-        tool_calls: &mut Vec<String>,
-    ) -> Result<(bool, String)> {
-        let result = self.tool_executor.execute(tool_call.clone(), &self.config).await?;
-
-        // Special handling for file_write
-        if tool_call.name == "file_write" && result.success {
-            if let Some(content) = tool_call.args.get("content").and_then(|c| c.as_str()) {
-                let path = tool_call.args
-                    .get("path")
-                    .and_then(|p| p.as_str())
-                    .unwrap_or("unknown");
-                self.tool_executor.format_file_write_output(path, content);
-            }
-        }
-
-        tool_calls.push(tool_call.name.clone());
-
-        // Add result to conversation
-        let observation = format!("Tool '{}' result: {}", tool_call.name, result.output);
-        self.conversation_history.push(MMessage::assistant(observation));
-
-        Ok((result.success, result.output))
     }
 
     /// Create agent result
@@ -150,7 +95,7 @@ impl AgentBehaviorImpl {
 
 #[async_trait::async_trait]
 impl AgentBehavior for AgentBehaviorImpl {
-    /// Run the agent on a task
+    /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
         tracing::info!("Starting agent run for task: {}", task);
 
@@ -159,16 +104,17 @@ impl AgentBehavior for AgentBehaviorImpl {
 
         let mut tool_calls = Vec::new();
 
-        // ReACT loop
+        // ReACT loop: Reason → Act → Observe → repeat
         loop {
             self.iteration_count += 1;
             self.check_iteration_limit()?;
 
             tracing::debug!("Agent iteration: {}", self.iteration_count);
 
+            // REASON: Get model response with reasoning
             let response = self.get_model_response().await?;
 
-            // Check if task is complete
+            // Check if task is complete (model says FINISH)
             if ToolCallParser::is_complete(&response.content) {
                 tracing::info!("Task complete detected!");
                 // Add final response to history before returning
@@ -176,15 +122,32 @@ impl AgentBehavior for AgentBehaviorImpl {
                 return Ok(self.create_result(true, response.content, tool_calls));
             }
 
-            // ACT: Parse and execute tool calls
+            // ACT: Try to parse and execute tool call
             if let Some(tool_call) = ToolCallParser::parse(&response.content) {
-                let (success, output) = self.handle_tool_call(&tool_call, &mut tool_calls).await?;
+                let result = self.tool_executor.execute(tool_call.clone(), &self.config).await?;
 
-                if !success {
-                    return Ok(self.create_result(false, output, tool_calls));
+                tool_calls.push(tool_call.name.clone());
+
+                // Special handling for file_write to show user what was written
+                if tool_call.name == "file_write" && result.success {
+                    if let Some(content) = tool_call.args.get("content").and_then(|c| c.as_str()) {
+                        let path = tool_call.args
+                            .get("path")
+                            .and_then(|p| p.as_str())
+                            .unwrap_or("unknown");
+                        self.tool_executor.format_file_write_output(path, content);
+                    }
                 }
+
+                // OBSERVE: Add tool result to conversation history
+                // This lets the model see the outcome and decide next action
+                let observation = format!("Tool '{}' result: {}", tool_call.name, result.output);
+                self.conversation_history.push(MMessage::user(observation));
+
+                // Continue loop - model will reason about the result
             } else {
-                // No tool call found, add response to history
+                // No valid tool call found - treat as free-form response
+                // Add to history and continue (model may refine or try again)
                 self.conversation_history.push(MMessage::assistant(response.content));
             }
         }
@@ -219,7 +182,8 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::model::{ModelInfo, ModelResponse, TokenUsage};
+    use crate::model::{ModelInfo, ToolDefinition};
+    use crate::model::traits::language_model::TokenUsage;
     use crate::permissions::PermissionManager;
     use crate::tools::ToolRegistry;
 
@@ -229,12 +193,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl crate::model::LanguageModel for MockModel {
+    impl LanguageModel for MockModel {
         async fn complete(&self, _: &str, _: Option<&str>) -> crate::error::Result<ModelResponse> {
             unimplemented!()
         }
 
-        async fn chat(&self, _: &[crate::model::MMessage]) -> crate::error::Result<ModelResponse> {
+        async fn chat(&self, _: &[MMessage]) -> crate::error::Result<ModelResponse> {
             let mut count = self.call_count.lock().unwrap();
             let response = self.responses[*count].clone();
             *count += 1;
@@ -250,8 +214,8 @@ mod tests {
 
         async fn chat_with_tools(
             &self,
-            messages: &[crate::model::MMessage],
-            _: &[crate::model::ToolDefinition],
+            messages: &[MMessage],
+            _: &[ToolDefinition],
         ) -> crate::error::Result<ModelResponse> {
             self.chat(messages).await
         }
@@ -296,5 +260,150 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.iterations, 2);
         assert_eq!(result.tool_calls.len(), 1);
+    }
+
+    /// Example: Using AgentBehaviorImpl with Kimi LLM
+    ///
+    /// This example demonstrates how to:
+    /// 1. Create a KimiProvider with API key
+    /// 2. Initialize AgentBehaviorImpl with the Kimi model
+    /// 3. Execute a task using the ReACT loop
+    ///
+    /// To run this example:
+    /// ```bash
+    /// KIMI_API_KEY="your-api-key" cargo test test_agent_with_kimi_example -- --ignored --nocapture
+    /// ```
+    #[tokio::test]
+    #[ignore]
+    async fn test_agent_with_kimi_example() {
+        // Step 1: Get Kimi API key from environment
+        let api_key = std::env::var("KIMI_API_KEY")
+            .expect("KIMI_API_KEY environment variable not set");
+
+        // Step 2: Create Kimi provider
+        let kimi_provider = crate::model::kimi::KimiProvider::new(
+            api_key,
+            Some("moonshot-v1".to_string()),
+        );
+        let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
+
+        // Step 3: Create tool registry and register tools
+        let mut tools = ToolRegistry::new();
+        // Register available tools (example: file operations)
+        tools.register(crate::tools::file_ops::FileListTool::new());
+
+        // Step 4: Create configuration
+        let mut config = Config::default();
+        config.safety.require_approval = false;
+
+        // Step 5: Create permission manager and set permissions
+        let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        permission_manager
+            .lock()
+            .unwrap()
+            .set_permission("file_list".to_string(), crate::permissions::PermissionLevel::Always)
+            .unwrap();
+
+        // Step 6: Initialize AgentBehaviorImpl with Kimi
+        let mut agent = AgentBehaviorImpl::new(
+            model,
+            tools,
+            config,
+            Vec::new(),  // empty conversation history
+            permission_manager,
+        )
+        .await
+        .expect("Failed to create agent");
+
+        // Step 7: Execute a task
+        let task = "列出当前目录中的所有文件";
+        println!("\n📋 Task: {}", task);
+
+        match agent.execute_task(task.to_string()).await {
+            Ok(result) => {
+                println!("\n✅ Task completed successfully!");
+                println!("  Success: {}", result.success);
+                println!("  Iterations: {}", result.iterations);
+                println!("  Tools used: {:?}", result.tool_calls);
+                println!("  Output:\n{}", result.output);
+            }
+            Err(e) => {
+                eprintln!("\n❌ Task failed: {}", e);
+            }
+        }
+
+        // Step 8: Access conversation history
+        let history = agent.get_conversation_history();
+        println!("\n📝 Conversation history ({} messages):", history.len());
+        for (i, msg) in history.iter().enumerate() {
+            println!("  [{}] {}: {}", i, msg.role, &msg.content[..msg.content.len().min(50)]);
+        }
+    }
+
+    /// Example: Using AgentBehaviorImpl with Kimi for multi-turn conversation
+    ///
+    /// This example shows how to maintain conversation state across multiple tasks
+    ///
+    /// To run this example:
+    /// ```bash
+    /// KIMI_API_KEY="your-api-key" cargo test test_agent_kimi_multi_turn -- --ignored --nocapture
+    /// ```
+    #[tokio::test]
+    #[ignore]
+    async fn test_agent_kimi_multi_turn() {
+        let api_key = std::env::var("KIMI_API_KEY")
+            .expect("KIMI_API_KEY environment variable not set");
+
+        let kimi_provider = crate::model::kimi::KimiProvider::new(
+            api_key,
+            Some("moonshot-v1".to_string()),
+        );
+        let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
+
+        let mut tools = ToolRegistry::new();
+        tools.register(crate::tools::file_ops::FileListTool::new());
+
+        let mut config = Config::default();
+        config.safety.require_approval = false;
+
+        let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        permission_manager
+            .lock()
+            .unwrap()
+            .set_permission("file_list".to_string(), crate::permissions::PermissionLevel::Always)
+            .unwrap();
+
+        let mut agent = AgentBehaviorImpl::new(
+            model,
+            tools,
+            config,
+            Vec::new(),
+            permission_manager,
+        )
+        .await
+        .expect("Failed to create agent");
+
+        // Execute multiple tasks in sequence
+        let tasks = vec![
+            "你好，请介绍一下你自己",
+            "列出当前目录的文件",
+        ];
+
+        for (idx, task) in tasks.iter().enumerate() {
+            println!("\n🔄 Task {}: {}", idx + 1, task);
+
+            match agent.execute_task(task.to_string()).await {
+                Ok(result) => {
+                    println!("✅ Result: {}", &result.output[..result.output.len().min(100)]);
+                }
+                Err(e) => {
+                    eprintln!("❌ Error: {}", e);
+                }
+            }
+        }
+
+        // Show final conversation history
+        let history = agent.get_conversation_history();
+        println!("\n📊 Final conversation has {} messages", history.len());
     }
 }

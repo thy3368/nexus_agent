@@ -1,7 +1,8 @@
 //! Google Gemini API provider implementation
 
-use super::{LanguageModel, MMessage, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
+use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
+use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -32,14 +33,14 @@ impl GeminiProvider {
 
     fn convert_messages(&self, messages: &[MMessage]) -> Vec<serde_json::Value> {
         let mut parts = Vec::new();
-        
+
         for msg in messages {
             let role = match msg.role.as_str() {
                 "system" => "user", // Gemini doesn't have system role, merge into user
                 "assistant" => "model",
                 _ => "user",
             };
-            
+
             parts.push(json!({
                 "role": role,
                 "parts": [{
@@ -47,7 +48,7 @@ impl GeminiProvider {
                 }]
             }));
         }
-        
+
         parts
     }
 }
@@ -56,13 +57,13 @@ impl GeminiProvider {
 impl LanguageModel for GeminiProvider {
     async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
         let mut messages = Vec::new();
-        
+
         if let Some(sys) = system_prompt {
             messages.push(MMessage::system(sys));
         }
-        
+
         messages.push(MMessage::user(prompt));
-        
+
         self.chat(&messages).await
     }
 
@@ -73,7 +74,7 @@ impl LanguageModel for GeminiProvider {
         );
 
         let contents = self.convert_messages(messages);
-        
+
         let request_body = json!({
             "contents": contents,
             "generationConfig": {
@@ -91,7 +92,10 @@ impl LanguageModel for GeminiProvider {
             .map_err(|e| ModelError::Api(format!("Request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(ModelError::Api(format!("API error: {}", error_text)).into());
         }
 
@@ -110,7 +114,8 @@ impl LanguageModel for GeminiProvider {
         let usage = if let Some(usage_metadata) = response_json.get("usageMetadata") {
             TokenUsage {
                 prompt_tokens: usage_metadata["promptTokenCount"].as_u64().unwrap_or(0) as usize,
-                completion_tokens: usage_metadata["candidatesTokenCount"].as_u64().unwrap_or(0) as usize,
+                completion_tokens: usage_metadata["candidatesTokenCount"].as_u64().unwrap_or(0)
+                    as usize,
                 total_tokens: usage_metadata["totalTokenCount"].as_u64().unwrap_or(0) as usize,
             }
         } else {

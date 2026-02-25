@@ -4,7 +4,8 @@
 use kameo::message::{Context, Message};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::behavior::agent::{AgentBehavior, AgentBehaviorImpl, AgentResult};
+use crate::agent::behavior::agent::{ AgentBehaviorImpl};
+use crate::agent::behavior::{AgentBehavior, AgentResult};
 use crate::error;
 
 /// Message for executing a task asynchronously via Actor
@@ -33,7 +34,8 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::model::{ModelInfo, ModelResponse, TokenUsage};
+    use crate::model::ModelInfo;
+    use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
     use crate::permissions::PermissionManager;
     use crate::tools::ToolRegistry;
 
@@ -43,12 +45,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl crate::model::LanguageModel for MockModel {
+    impl LanguageModel for MockModel {
         async fn complete(&self, _: &str, _: Option<&str>) -> error::Result<ModelResponse> {
             unimplemented!()
         }
 
-        async fn chat(&self, _: &[crate::model::MMessage]) -> error::Result<ModelResponse> {
+        async fn chat(&self, _: &[MMessage]) -> error::Result<ModelResponse> {
             let mut count = self.call_count.lock().unwrap();
             let response = self.responses[*count].clone();
             *count += 1;
@@ -64,7 +66,7 @@ mod tests {
 
         async fn chat_with_tools(
             &self,
-            messages: &[crate::model::MMessage],
+            messages: &[MMessage],
             _: &[crate::model::ToolDefinition],
         ) -> error::Result<ModelResponse> {
             self.chat(messages).await

@@ -1,7 +1,8 @@
 //! OpenAI API provider implementation
 
-use super::{LanguageModel, MMessage, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
+use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
+use crate::model::traits::language_model::{LanguageModel, MMessage, ModelResponse, TokenUsage};
 use async_trait::async_trait;
 
 pub struct OpenAIProvider {
@@ -34,37 +35,31 @@ impl OpenAIProvider {
         use async_openai::types::*;
 
         match msg.role.as_str() {
-            "system" => ChatCompletionRequestMessage::System(
-                ChatCompletionRequestSystemMessage {
-                    content: msg.content.clone(),
-                    role: Role::System,
-                    name: None,
-                },
-            ),
-            "user" => ChatCompletionRequestMessage::User(
-                ChatCompletionRequestUserMessage {
-                    content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
-                    role: Role::User,
-                    name: None,
-                },
-            ),
-            "assistant" => ChatCompletionRequestMessage::Assistant(
-                ChatCompletionRequestAssistantMessage {
+            "system" => ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
+                content: msg.content.clone(),
+                role: Role::System,
+                name: None,
+            }),
+            "user" => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+                content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
+                role: Role::User,
+                name: None,
+            }),
+            "assistant" => {
+                ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
                     content: Some(msg.content.clone()),
                     name: None,
                     role: Role::Assistant,
                     #[allow(deprecated)]
                     function_call: None,
                     tool_calls: None,
-                },
-            ),
-            _ => ChatCompletionRequestMessage::User(
-                ChatCompletionRequestUserMessage {
-                    content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
-                    role: Role::User,
-                    name: None,
-                },
-            ),
+                })
+            }
+            _ => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+                content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
+                role: Role::User,
+                name: None,
+            }),
         }
     }
 }
@@ -108,11 +103,7 @@ impl LanguageModel for OpenAIProvider {
             .first()
             .ok_or_else(|| ModelError::InvalidResponse("No choices in response".to_string()))?;
 
-        let content = choice
-            .message
-            .content
-            .clone()
-            .unwrap_or_default();
+        let content = choice.message.content.clone().unwrap_or_default();
 
         let usage = if let Some(usage) = response.usage {
             TokenUsage {

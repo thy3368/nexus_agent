@@ -37,12 +37,6 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Run agent in plan mode (read-only analysis)
-    Plan {
-        /// Task to plan
-        task: String,
-    },
-
     /// Run agent in execution mode
     Agent {
         /// Task to execute
