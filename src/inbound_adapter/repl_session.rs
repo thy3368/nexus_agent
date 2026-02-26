@@ -2,7 +2,7 @@
 
 use std::io::{self, Write};
 
-use crate::agent::behavior::agent::AgentBehaviorImpl;
+use crate::agent::behavior::agent_react::AgentBehaviorReAct;
 use crate::agent::behavior::AgentBehavior;
 use crate::commands::CommandHandler;
 use crate::repl::ReplHelper;
@@ -10,7 +10,7 @@ use crate::setup;
 use crate::Config;
 
 pub struct ReplSession {
-    agent: AgentBehaviorImpl,
+    agent: AgentBehaviorReAct,
     command_handler: CommandHandler,
 }
 
@@ -20,7 +20,7 @@ impl ReplSession {
         let tools = setup::create_tools();
         let permission_manager = setup::create_permission_manager()?;
 
-        let agent = AgentBehaviorImpl::new(
+        let agent = AgentBehaviorReAct::new(
             model,
             tools,
             config.clone(),

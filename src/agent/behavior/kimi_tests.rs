@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::agent::behavior::agent::AgentBehaviorImpl;
+use crate::agent::behavior::agent_react::AgentBehaviorReAct;
 use crate::agent::behavior::traits::AgentBehavior;
 use crate::config::Config;
 use crate::model::traits::language_model::{LanguageModel, ModelReply, TokenUsage};
@@ -53,7 +53,7 @@ async fn test_agent_with_kimi_example() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorImpl::new(
+    let mut agent = AgentBehaviorReAct::new(
         model,
         tools,
         config,
@@ -114,7 +114,7 @@ async fn test_agent_kimi_multi_turn() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorImpl::new(
+    let mut agent = AgentBehaviorReAct::new(
         model,
         tools,
         config,

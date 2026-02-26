@@ -19,7 +19,7 @@ use super::tool_parser::{ModelResponseParser, ParsedResponse};
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
-pub struct AgentBehaviorImpl {
+pub struct AgentBehaviorReAct {
     model: Box<dyn LanguageModel>,
     tool_executor: ToolExecutor,
     prompt_builder: SystemPromptBuilder,
@@ -29,7 +29,7 @@ pub struct AgentBehaviorImpl {
     conversation_history: Vec<AgentMessage>,
 }
 
-impl AgentBehaviorImpl {
+impl AgentBehaviorReAct {
     /// Create a new agent
     pub async fn new(
         model: Box<dyn LanguageModel>,
@@ -100,7 +100,7 @@ impl AgentBehaviorImpl {
 }
 
 #[async_trait::async_trait]
-impl AgentBehavior for AgentBehaviorImpl {
+impl AgentBehavior for AgentBehaviorReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
         tracing::info!("Starting agent run for task: {}", task);
