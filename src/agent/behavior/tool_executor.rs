@@ -2,21 +2,20 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::context_provider::ContextProvider;
 use crate::config::Config;
 use crate::error::Result;
 use crate::formatter::ResponseFormatter;
 use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::safety::SafetyValidator;
-use crate::tools::{ToolContext, ToolRegistry};
-
-use super::context_provider::ContextProvider;
+use crate::tools::tool_registry::ToolRegistry;
+use crate::tools::traits::tool::ToolContext;
 
 #[derive(Debug, Clone)]
 pub struct ToolCall {
     pub name: String,
     pub args: serde_json::Value,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ToolExecutionResult {
@@ -47,7 +46,11 @@ impl ToolExecutor {
     }
 
     /// Execute a tool call with permission and safety checks
-    pub async fn execute(&self, tool_call: ToolCall, config: &Config) -> Result<ToolExecutionResult> {
+    pub async fn execute(
+        &self,
+        tool_call: ToolCall,
+        config: &Config,
+    ) -> Result<ToolExecutionResult> {
         tracing::info!("Executing tool: {}", tool_call.name);
 
         // Check permission
@@ -101,7 +104,10 @@ impl ToolExecutor {
         }
 
         // Execute the tool
-        let result = self.tools.execute(&tool_call.name, tool_call.args.clone(), &ctx, config).await?;
+        let result = self
+            .tools
+            .execute(&tool_call.name, tool_call.args.clone(), &ctx, config)
+            .await?;
 
         // Format and display result
         let result_text = if result.success {
@@ -110,7 +116,9 @@ impl ToolExecutor {
             result.error.as_ref().unwrap_or(&result.output)
         };
 
-        let formatted_output = self.formatter.format_tool_result(&tool_call.name, result_text);
+        let formatted_output = self
+            .formatter
+            .format_tool_result(&tool_call.name, result_text);
         print!("{}", formatted_output);
         use std::io::Write;
         std::io::stdout().flush().ok();

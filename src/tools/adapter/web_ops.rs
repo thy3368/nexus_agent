@@ -1,7 +1,7 @@
 //! Web operation tools
 
-use super::{Tool, ToolContext, ToolResult};
 use crate::error::{Result, ToolError};
+use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 
 /// Web Get tool
@@ -46,7 +46,12 @@ impl Tool for WebGetTool {
         true
     }
 
-    async fn execute(&self, args: serde_json::Value, _ctx: &ToolContext, _config: &crate::config::Config) -> Result<ToolResult> {
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        _ctx: &ToolContext,
+        _config: &crate::config::Config,
+    ) -> Result<ToolResult> {
         let url = args["url"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArgs("Missing URL".to_string()))?;
@@ -54,18 +59,25 @@ impl Tool for WebGetTool {
         tracing::info!("Performing web GET request to: {}", url);
 
         let client = reqwest::Client::new();
-        let response = client.get(url).send().await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to send request: {}", e)))?;
+        let response =
+            client.get(url).send().await.map_err(|e| {
+                ToolError::ExecutionFailed(format!("Failed to send request: {}", e))
+            })?;
 
         let status = response.status();
-        let body = response.text().await
-            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read response body: {}", e)))?;
+        let body = response.text().await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to read response body: {}", e))
+        })?;
 
         if status.is_success() {
             Ok(ToolResult::success(body)
                 .with_metadata("status", serde_json::json!(status.as_u16())))
         } else {
-            Err(ToolError::ExecutionFailed(format!("Request failed with status {}: {}", status, body)).into())
+            Err(ToolError::ExecutionFailed(format!(
+                "Request failed with status {}: {}",
+                status, body
+            ))
+            .into())
         }
     }
 }
@@ -73,8 +85,8 @@ impl Tool for WebGetTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::{MockServer, Mock, ResponseTemplate};
     use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn test_web_get_success() {
@@ -90,7 +102,10 @@ mod tests {
         let config = crate::config::Config::default();
 
         let url = format!("{}/test", mock_server.uri());
-        let result = tool.execute(serde_json::json!({"url": url}), &ctx, &config).await.unwrap();
+        let result = tool
+            .execute(serde_json::json!({"url": url}), &ctx, &config)
+            .await
+            .unwrap();
 
         assert!(result.success);
         assert_eq!(result.output, "Hello from mock!");
@@ -111,7 +126,9 @@ mod tests {
         let config = crate::config::Config::default();
 
         let url = format!("{}/error", mock_server.uri());
-        let result = tool.execute(serde_json::json!({"url": url}), &ctx, &config).await;
+        let result = tool
+            .execute(serde_json::json!({"url": url}), &ctx, &config)
+            .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();

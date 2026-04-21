@@ -1,8 +1,8 @@
 use super::repl_session::ReplSession;
-use crate::agent::behavior::agent_react::AgentBehaviorReAct;
-use crate::agent::behavior::AgentBehavior;
+use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::behavior::Agent;
+use crate::config::Config;
 use crate::setup;
-use crate::Config;
 
 pub async fn handle_init() -> anyhow::Result<()> {
     println!("🚀 Initializing PromptLine...\n");

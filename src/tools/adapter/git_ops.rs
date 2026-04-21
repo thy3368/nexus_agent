@@ -1,7 +1,7 @@
 //! Git operation tools
 
-use super::{Tool, ToolContext, ToolResult};
 use crate::error::{Result, ToolError};
+use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 use tokio::process::Command;
 
@@ -41,7 +41,12 @@ impl Tool for GitStatusTool {
         true
     }
 
-    async fn execute(&self, _args: serde_json::Value, ctx: &ToolContext, _config: &crate::config::Config) -> Result<ToolResult> {
+    async fn execute(
+        &self,
+        _args: serde_json::Value,
+        ctx: &ToolContext,
+        _config: &crate::config::Config,
+    ) -> Result<ToolResult> {
         tracing::info!("Executing git status");
 
         let output = Command::new("git")
@@ -103,7 +108,12 @@ impl Tool for GitDiffTool {
         true
     }
 
-    async fn execute(&self, args: serde_json::Value, ctx: &ToolContext, _config: &crate::config::Config) -> Result<ToolResult> {
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        ctx: &ToolContext,
+        _config: &crate::config::Config,
+    ) -> Result<ToolResult> {
         tracing::info!("Executing git diff");
 
         let mut command = Command::new("git");
@@ -168,7 +178,12 @@ impl Tool for GitCommitTool {
         false
     }
 
-    async fn execute(&self, args: serde_json::Value, ctx: &ToolContext, _config: &crate::config::Config) -> Result<ToolResult> {
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        ctx: &ToolContext,
+        _config: &crate::config::Config,
+    ) -> Result<ToolResult> {
         let message = args["message"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArgs("Missing commit message".to_string()))?;
@@ -197,8 +212,8 @@ impl Tool for GitCommitTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     async fn setup_git_repo() -> TempDir {
         let temp_dir = TempDir::new().unwrap();
@@ -246,7 +261,10 @@ mod tests {
         };
         let config = crate::config::Config::default();
 
-        let result = tool.execute(serde_json::json!({}), &ctx, &config).await.unwrap();
+        let result = tool
+            .execute(serde_json::json!({}), &ctx, &config)
+            .await
+            .unwrap();
         assert!(result.success);
         assert!(result.output.contains("?? test.txt"));
     }
@@ -282,7 +300,10 @@ mod tests {
         };
         let config = crate::config::Config::default();
 
-        let result = tool.execute(serde_json::json!({"path": "test.txt"}), &ctx, &config).await.unwrap();
+        let result = tool
+            .execute(serde_json::json!({"path": "test.txt"}), &ctx, &config)
+            .await
+            .unwrap();
         assert!(result.success);
         assert!(result.output.contains("-initial content"));
         assert!(result.output.contains("+modified content"));
@@ -309,7 +330,10 @@ mod tests {
         };
         let config = crate::config::Config::default();
 
-        let result = tool.execute(serde_json::json!({"message": "Test commit"}), &ctx, &config).await.unwrap();
+        let result = tool
+            .execute(serde_json::json!({"message": "Test commit"}), &ctx, &config)
+            .await
+            .unwrap();
         assert!(result.success);
         assert!(result.output.contains("Test commit"));
 

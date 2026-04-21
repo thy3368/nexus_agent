@@ -1,11 +1,11 @@
 //! Prompt template management
 
 use crate::error::{PromptLineError, Result};
-use crate::model::traits::language_model::AgentMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
+use crate::llm::traits::language_model::AgentMessage;
 
 const TEMPLATES_DIR_NAME: &str = "templates";
 

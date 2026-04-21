@@ -2,20 +2,20 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::agent::behavior::traits::agent_behavior::{AgentBehavior, AgentResult};
+use crate::agent::traits::agent_behavior::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
 use crate::formatter::ResponseFormatter;
 use crate::loading::LoadingIndicator;
-use crate::model::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
 use crate::permissions::PermissionManager;
-use crate::tools::ToolRegistry;
 use kameo::Actor;
 use serde::{Deserialize, Serialize};
 
-use super::prompt_builder::SystemPromptBuilder;
-use super::tool_executor::ToolExecutor;
-use super::tool_parser::{ModelResponseParser, ParsedResponse};
+use crate::agent::behavior::prompt_builder::SystemPromptBuilder;
+use crate::agent::behavior::tool_executor::ToolExecutor;
+use crate::agent::behavior::tool_parser::{ModelResponseParser, ParsedResponse};
+use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
+use crate::tools::tool_registry::ToolRegistry;
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
@@ -100,7 +100,7 @@ impl AgentBehaviorReAct {
 }
 
 #[async_trait::async_trait]
-impl AgentBehavior for AgentBehaviorReAct {
+impl Agent for AgentBehaviorReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
         tracing::info!("Starting agent run for task: {}", task);

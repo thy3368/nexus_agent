@@ -1,6 +1,18 @@
-use crate::model::{ModelInfo, ToolDefinition};
+// use crate::model::{ModelInfo, ToolDefinition};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use crate::tools::traits::tool::ToolDefinition;
+
+/// Model information
+#[derive(Debug, Clone)]
+pub struct LlmInfo {
+    pub provider: String,
+    pub model: String,
+    pub max_tokens: usize,
+    pub supports_tools: bool,
+    pub supports_streaming: bool,
+}
+
 
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,7 +91,7 @@ pub trait LanguageModel: Send + Sync {
     ) -> crate::Result<ModelReply>;
 
     /// Get model information
-    fn model_info(&self) -> ModelInfo;
+    fn model_info(&self) -> LlmInfo;
 
     /// Estimate token count for text
     fn estimate_tokens(&self, text: &str) -> usize {

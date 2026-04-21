@@ -1,10 +1,10 @@
 //! Shell command execution tool
 
-use super::{Tool, ToolContext, ToolResult};
 use crate::error::Result;
 use async_trait::async_trait;
 use std::process::Stdio;
 use tokio::process::Command;
+use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
 
 /// Shell command execution tool
 pub struct ShellTool {

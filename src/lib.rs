@@ -9,7 +9,6 @@ pub mod context;
 pub mod error;
 pub mod formatter;
 pub mod loading;
-pub mod model;
 pub mod permissions;
 pub mod prompt;
 pub mod repl;
@@ -19,18 +18,19 @@ pub mod tools;
 pub mod util;
 
 pub mod inbound_adapter;
+pub mod llm;
 
-// Re-export commonly used types
-pub use config::Config;
+// // Re-export commonly used types
+// pub use config::Config;
 pub use error::{PromptLineError, Result};
-pub use tools::{Tool, ToolResult};
+// pub use tools::{Tool, ToolResult};
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Prelude for convenient imports
-pub mod prelude {
-    pub use crate::config::Config;
-    pub use crate::error::{PromptLineError, Result};
-    pub use crate::tools::{Tool, ToolResult};
-}
+// Prelude for convenient imports
+// pub mod prelude {
+//     pub use crate::config::Config;
+//     pub use crate::error::{PromptLineError, Result};
+//     // pub use crate::tools::{Tool, ToolResult};
+// }

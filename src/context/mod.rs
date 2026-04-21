@@ -1,9 +1,9 @@
 //! Context management for PromptLine
 
 use crate::error::Result;
-use crate::model::traits::language_model::AgentMessage;
 use std::path::PathBuf;
 use tokio::fs;
+use crate::llm::traits::language_model::AgentMessage;
 
 const HISTORY_FILE_NAME: &str = "history.json";
 

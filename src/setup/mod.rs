@@ -1,34 +1,44 @@
-use crate::model::openai::OpenAIProvider;
-use crate::model::ollama::OllamaProvider;
-use crate::tools::{file_ops, git_ops, search_ops, shell, web_ops, ToolRegistry};
 use crate::permissions::PermissionManager;
-use crate::Config;
+
+use crate::config::Config;
+use crate::llm::adapter::ollama::OllamaProvider;
+use crate::llm::adapter::openai::OpenAIProvider;
+use crate::llm::traits::language_model::LanguageModel;
+use crate::tools::adapter::{file_ops, git_ops, search_ops, shell, web_ops};
+use crate::tools::tool_registry::ToolRegistry;
 use std::sync::{Arc, Mutex};
-use crate::model::traits::language_model::LanguageModel;
 
 pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {
-    let provider = std::env::var("PROMPTLINE_PROVIDER")
-        .unwrap_or_else(|_| "openai".to_string());
+    let provider = std::env::var("PROMPTLINE_PROVIDER").unwrap_or_else(|_| "openai".to_string());
 
     match provider.as_str() {
         "ollama" => {
             let api_key = std::env::var("OLLAMA_API_KEY").ok().or_else(|| {
-                config.models.providers.get("ollama")
+                config
+                    .models
+                    .providers
+                    .get("ollama")
                     .and_then(|p| p.api_key.clone())
             });
 
-            let base_url = config.models.providers.get("ollama")
+            let base_url = config
+                .models
+                .providers
+                .get("ollama")
                 .and_then(|p| p.base_url.clone());
 
             Ok(Box::new(OllamaProvider::new(
                 base_url,
                 api_key,
-                Some(config.models.default.clone())
+                Some(config.models.default.clone()),
             )))
         }
         "openai" | _ => {
             let api_key = std::env::var("OPENAI_API_KEY").ok().or_else(|| {
-                config.models.providers.get("openai")
+                config
+                    .models
+                    .providers
+                    .get("openai")
                     .and_then(|p| p.api_key.clone())
             });
 
@@ -36,7 +46,10 @@ pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {
                 anyhow::anyhow!("OPENAI_API_KEY not set. You can set it via:\n1. Environment variable: OPENAI_API_KEY\n2. Config file: ~/.promptline/config.yaml (under models.providers.openai.api_key)")
             })?;
 
-            Ok(Box::new(OpenAIProvider::new(api_key, Some(config.models.default.clone()))))
+            Ok(Box::new(OpenAIProvider::new(
+                api_key,
+                Some(config.models.default.clone()),
+            )))
         }
     }
 }

@@ -1,10 +1,10 @@
 //! Google Gemini API provider implementation
 
-use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
 use async_trait::async_trait;
 use serde_json::json;
+use crate::llm::traits::language_model::{AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage};
+use crate::tools::traits::tool::ToolDefinition;
 
 pub struct GeminiProvider {
     api_key: String,
@@ -143,8 +143,8 @@ impl LanguageModel for GeminiProvider {
         self.chat(messages).await
     }
 
-    fn model_info(&self) -> ModelInfo {
-        ModelInfo {
+    fn model_info(&self) -> LlmInfo {
+        LlmInfo {
             provider: "gemini".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,

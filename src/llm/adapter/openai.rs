@@ -1,8 +1,8 @@
 //! OpenAI API provider implementation
 
-use super::{ModelInfo, ToolDefinition};
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
+use crate::llm::traits::language_model::{AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage};
+use crate::tools::traits::tool::ToolDefinition;
 use async_trait::async_trait;
 
 pub struct OpenAIProvider {
@@ -31,7 +31,10 @@ impl OpenAIProvider {
         self
     }
 
-    fn convert_message(&self, msg: &AgentMessage) -> async_openai::types::ChatCompletionRequestMessage {
+    fn convert_message(
+        &self,
+        msg: &AgentMessage,
+    ) -> async_openai::types::ChatCompletionRequestMessage {
         use async_openai::types::*;
 
         match msg.role.as_str() {
@@ -134,8 +137,8 @@ impl LanguageModel for OpenAIProvider {
         self.chat(messages).await
     }
 
-    fn model_info(&self) -> ModelInfo {
-        ModelInfo {
+    fn model_info(&self) -> LlmInfo {
+        LlmInfo {
             provider: "openai".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,

@@ -1,5 +1,8 @@
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
+use crate::llm::traits::language_model::{
+    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+};
+use crate::tools::traits::tool::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -116,14 +119,14 @@ impl LanguageModel for OllamaProvider {
     async fn chat_with_tools(
         &self,
         messages: &[AgentMessage],
-        _tools: &[crate::model::ToolDefinition],
+        _tools: &[ToolDefinition],
     ) -> Result<ModelReply> {
         // For now, just ignore tools and chat normally
         self.chat(messages).await
     }
 
-    fn model_info(&self) -> crate::model::ModelInfo {
-        crate::model::ModelInfo {
+    fn model_info(&self) -> LlmInfo {
+        LlmInfo {
             provider: "ollama".to_string(),
             model: self.default_model.clone(),
             max_tokens: 4096, // Default assumption

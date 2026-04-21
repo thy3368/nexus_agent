@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::model::traits::language_model::AgentMessage;
+use crate::llm::traits::language_model::AgentMessage;
 
 /// Agent execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,7 +12,7 @@ pub struct AgentResult {
 
 /// Agent behavior trait - defines Use Case layer interface
 #[async_trait::async_trait]
-pub trait AgentBehavior: Send + Sync {
+pub trait Agent: Send + Sync {
     /// Execute a task using ReACT loop
     async fn execute_task(&mut self, task: String) -> crate::Result<AgentResult>;
 

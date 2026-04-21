@@ -4,8 +4,8 @@
 use kameo::message::{Context, Message};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::behavior::agent_react::{AgentBehaviorReAct};
-use crate::agent::behavior::{AgentBehavior, AgentResult};
+use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::behavior::{Agent, AgentResult};
 use crate::error;
 
 /// Message for executing a task asynchronously via Actor
@@ -34,10 +34,12 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::model::ModelInfo;
-    use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
+    use crate::llm::traits::language_model::{
+        AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+    };
     use crate::permissions::PermissionManager;
-    use crate::tools::ToolRegistry;
+    use crate::tools::tool_registry::ToolRegistry;
+    use crate::tools::traits::tool::ToolDefinition;
 
     struct MockModel {
         responses: Vec<String>,
@@ -67,13 +69,13 @@ mod tests {
         async fn chat_with_tools(
             &self,
             messages: &[AgentMessage],
-            _: &[crate::model::ToolDefinition],
+            _: &[ToolDefinition],
         ) -> error::Result<ModelReply> {
             self.chat(messages).await
         }
 
-        fn model_info(&self) -> ModelInfo {
-            ModelInfo {
+        fn model_info(&self) -> LlmInfo {
+            LlmInfo {
                 provider: "mock".to_string(),
                 model: "test".to_string(),
                 max_tokens: 4096,
@@ -96,13 +98,18 @@ mod tests {
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
+        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+            .await
+            .unwrap();
 
         // Spawn the actor using kameo's spawn method
         let actor_ref = AgentBehaviorReAct::spawn(agent);
 
         // Send message and await response
-        let result = actor_ref.ask(RunTaskCmd("test task".to_string())).await.unwrap();
+        let result = actor_ref
+            .ask(RunTaskCmd("test task".to_string()))
+            .await
+            .unwrap();
 
         assert!(result.success);
         assert_eq!(result.iterations, 1);
@@ -119,20 +126,25 @@ mod tests {
         });
 
         let mut tools = ToolRegistry::new();
-        tools.register(crate::tools::file_ops::FileListTool::new());
+        tools.register(crate::tools::adapter::file_ops::FileListTool::new());
 
         let mut config = Config::default();
         config.safety.require_approval = false;
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
+        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+            .await
+            .unwrap();
 
         // Spawn the actor using kameo's spawn method
         let actor_ref = AgentBehaviorReAct::spawn(agent);
 
         // Send message and await response
-        let result = actor_ref.ask(RunTaskCmd("List the files and size in".to_string())).await.unwrap();
+        let result = actor_ref
+            .ask(RunTaskCmd("List the files and size in".to_string()))
+            .await
+            .unwrap();
 
         println!("msg1 result: {:?}", result);
 

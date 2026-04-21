@@ -1,6 +1,7 @@
 mod cli;
 
 use cli::{Cli, Commands};
+use nexus_agent::config::Config;
 use nexus_agent::inbound_adapter::handlers;
 
 #[tokio::main]
@@ -21,9 +22,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut config = if let Some(config_path) = &cli.config {
-        nexus_agent::Config::load_from_file(config_path)?
+        Config::load_from_file(config_path)?
     } else {
-        nexus_agent::Config::load()?
+        Config::load()?
     };
 
     if cli.auto_approve {

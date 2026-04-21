@@ -1,6 +1,8 @@
 use crate::error::{ModelError, Result};
-use crate::model::traits::language_model::{LanguageModel, AgentMessage, ModelReply, TokenUsage};
-use crate::model::{ModelInfo, ToolDefinition};
+use crate::llm::traits::language_model::{
+    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+};
+use crate::tools::traits::tool::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -152,8 +154,8 @@ impl LanguageModel for KimiProvider {
         self.chat(messages).await
     }
 
-    fn model_info(&self) -> ModelInfo {
-        ModelInfo {
+    fn model_info(&self) -> LlmInfo {
+        LlmInfo {
             provider: "kimi".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,

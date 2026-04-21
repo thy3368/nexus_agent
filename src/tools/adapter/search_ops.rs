@@ -1,10 +1,10 @@
 //! Codebase search tool
 
-use super::{Tool, ToolContext, ToolResult};
 use crate::error::{Result, ToolError};
 use async_trait::async_trait;
 use tokio::process::Command;
 use std::path::PathBuf;
+use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
 
 /// Codebase Search tool
 pub struct CodebaseSearchTool;

@@ -2,15 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
-
-use crate::agent::behavior::agent_react::AgentBehaviorReAct;
-use crate::agent::behavior::traits::AgentBehavior;
+use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::traits::Agent;
 use crate::config::Config;
-use crate::model::traits::language_model::{LanguageModel, ModelReply, TokenUsage};
-use crate::model::{ModelInfo, ToolDefinition};
+use crate::llm::adapter::kimi::KimiProvider;
+use crate::llm::traits::language_model::LanguageModel;
+
 use crate::permissions::PermissionManager;
-use crate::tools::ToolRegistry;
+use crate::tools::tool_registry::ToolRegistry;
 
 fn init_logging() {
     use tracing_subscriber::{fmt, EnvFilter};
@@ -30,15 +29,13 @@ fn init_logging() {
 async fn test_agent_with_kimi_example() {
     init_logging();
 
-    let api_key =
-        std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
+    let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
 
-    let kimi_provider =
-        crate::model::kimi::KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
+    let kimi_provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    tools.register(crate::tools::file_ops::FileListTool::new());
+    tools.register(crate::tools::adapter::file_ops::FileListTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;
@@ -53,15 +50,9 @@ async fn test_agent_with_kimi_example() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorReAct::new(
-        model,
-        tools,
-        config,
-        Vec::new(),
-        permission_manager,
-    )
-    .await
-    .expect("Failed to create agent");
+    let mut agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+        .await
+        .expect("Failed to create agent");
 
     let task = "列出当前目录中的所有文件";
     println!("\n📋 Task: {}", task);
@@ -91,15 +82,13 @@ async fn test_agent_with_kimi_example() {
 async fn test_agent_kimi_multi_turn() {
     init_logging();
 
-    let api_key =
-        std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
+    let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
 
-    let kimi_provider =
-        crate::model::kimi::KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
+    let kimi_provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    tools.register(crate::tools::file_ops::FileListTool::new());
+    tools.register(crate::tools::adapter::file_ops::FileListTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;
@@ -114,15 +103,9 @@ async fn test_agent_kimi_multi_turn() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorReAct::new(
-        model,
-        tools,
-        config,
-        Vec::new(),
-        permission_manager,
-    )
-    .await
-    .expect("Failed to create agent");
+    let mut agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+        .await
+        .expect("Failed to create agent");
 
     let tasks = vec!["你好，请介绍一下你自己", "列出当前目录的文件"];
 

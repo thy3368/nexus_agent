@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::prompt::templates::TemplateManager;
-use crate::tools::ToolRegistry;
+use crate::tools::tool_registry::ToolRegistry;
 
 use super::context_provider::ContextProvider;
 
@@ -42,7 +42,8 @@ impl SystemPromptBuilder {
             "You are not in a git repository or branch could not be determined.".to_string()
         };
 
-        let base_prompt = if let Some(template_name) = &config.agent.default_system_prompt_template {
+        let base_prompt = if let Some(template_name) = &config.agent.default_system_prompt_template
+        {
             if let Some(template) = self.template_manager.get_template(template_name) {
                 let mut prompt = template.template.clone();
                 if let Some(examples) = &template.few_shot_examples {
@@ -63,7 +64,9 @@ impl SystemPromptBuilder {
         };
 
         let project_context = ContextProvider::get_project_context().await.ok().flatten();
-        let project_type = ContextProvider::get_project_type().await.unwrap_or_else(|_| "Generic".to_string());
+        let project_type = ContextProvider::get_project_type()
+            .await
+            .unwrap_or_else(|_| "Generic".to_string());
 
         let mut final_prompt = String::new();
         if let Some(context) = project_context {
@@ -98,7 +101,11 @@ To use a tool, output JSON in this format:
 When you've completed the task, respond with: FINISH
 
 Always explain your reasoning before taking an action."###,
-            base_prompt, current_dir, project_type, git_info, tool_descriptions.join("\n")
+            base_prompt,
+            current_dir,
+            project_type,
+            git_info,
+            tool_descriptions.join("\n")
         ));
 
         Ok(final_prompt)
