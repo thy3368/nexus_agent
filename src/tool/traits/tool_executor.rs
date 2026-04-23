@@ -2,14 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::tool::traits::context_provider::ContextProvider;
 use crate::config::Config;
 use crate::error::Result;
 use crate::formatter::ResponseFormatter;
 use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::safety::SafetyValidator;
 use crate::tool::tool_registry::ToolRegistry;
-use crate::tool::traits::tool::ToolContext;
+use crate::tool::traits::context_provider::ContextProvider;
+use crate::tool::traits::tool::{ToolContext, ToolInvocation};
 
 #[derive(Debug, Clone)]
 pub struct ToolCall {
@@ -45,15 +45,23 @@ impl ToolExecutor {
         }
     }
 
-    /// Execute a tool call with permission and safety checks
+    /// Execute a tool call with permission and safety checks.
+    ///
+    /// The executor owns cross-cutting concerns only: permissions, safety validation,
+    /// runtime context assembly and user-facing formatting. Actual argument validation,
+    /// mutability classification and execution are delegated into the registry's
+    /// ToolHandler-style dispatch path.
     pub async fn execute(
         &self,
         tool_call: ToolCall,
         config: &Config,
     ) -> Result<ToolExecutionResult> {
-        tracing::info!("Executing tool: {}", tool_call.name);
+        tracing::info!(tool = %tool_call.name, "executing tool");
 
-        // Check permission
+        let invocation = ToolInvocation::new(tool_call.name.clone(), tool_call.args.clone());
+
+        // Permission is checked before dispatch so potentially mutating tools cannot run
+        // without explicit approval.
         let permission_level = {
             let pm = self.permission_manager.lock().unwrap();
             pm.check_permission(&tool_call.name)
@@ -78,38 +86,30 @@ impl ToolExecutor {
                     });
                 }
             }
-            PermissionLevel::Once | PermissionLevel::Always => {
-                // Permission already granted
-            }
+            PermissionLevel::Once | PermissionLevel::Always => {}
         }
 
-        // Validate command
         let command_str = format!("{} {}", tool_call.name, tool_call.args);
         match self.safety_validator.validate_command(&command_str) {
             crate::safety::ValidationResult::Denied(reason) => {
                 return Err(crate::error::PromptLineError::Safety(reason));
             }
-            crate::safety::ValidationResult::RequiresApproval => {
-                // Already handled by permission check
-            }
+            crate::safety::ValidationResult::RequiresApproval => {}
             crate::safety::ValidationResult::Allowed => {
-                tracing::debug!("Command is allowed by safety validator");
+                tracing::debug!(tool = %tool_call.name, "tool call allowed by safety validator");
             }
         }
 
-        // Build tool context
         let mut ctx = ToolContext::default();
         if let Some(branch) = ContextProvider::get_git_branch_sync() {
             ctx.git_branch = Some(branch);
         }
 
-        // Execute the tool
-        let result = self
-            .tools
-            .execute(&tool_call.name, tool_call.args.clone(), &ctx, config)
-            .await?;
+        let is_mutating = self.tools.is_mutating(&invocation).await?;
+        tracing::debug!(tool = %tool_call.name, is_mutating, "tool mutability classified");
 
-        // Format and display result
+        let result = self.tools.dispatch(invocation, &ctx, config).await?;
+
         let result_text = if result.success {
             &result.output
         } else {
