@@ -14,7 +14,7 @@ pub mod prompt;
 pub mod repl;
 pub mod safety;
 pub mod setup;
-pub mod tools;
+pub mod tool;
 pub mod util;
 
 pub mod inbound_adapter;

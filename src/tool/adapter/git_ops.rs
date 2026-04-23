@@ -1,7 +1,7 @@
 //! Git operation tools
 
 use crate::error::{Result, ToolError};
-use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 use tokio::process::Command;
 

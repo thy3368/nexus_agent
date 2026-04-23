@@ -4,7 +4,7 @@ use crate::error::Result;
 use async_trait::async_trait;
 use std::process::Stdio;
 use tokio::process::Command;
-use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 
 /// Shell command execution tool
 pub struct ShellTool {

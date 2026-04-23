@@ -38,8 +38,8 @@ mod tests {
         AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
     };
     use crate::permissions::PermissionManager;
-    use crate::tools::tool_registry::ToolRegistry;
-    use crate::tools::traits::tool::ToolDefinition;
+    use crate::tool::tool_registry::ToolRegistry;
+    use crate::tool::traits::tool::ToolDefinition;
 
     struct MockModel {
         responses: Vec<String>,
@@ -126,7 +126,7 @@ mod tests {
         });
 
         let mut tools = ToolRegistry::new();
-        tools.register(crate::tools::adapter::file_ops::FileListTool::new());
+        tools.register(crate::tool::adapter::file_ops::FileListTool::new());
 
         let mut config = Config::default();
         config.safety.require_approval = false;

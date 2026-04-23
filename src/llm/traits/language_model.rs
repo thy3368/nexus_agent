@@ -1,7 +1,7 @@
 // use crate::model::{ModelInfo, ToolDefinition};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::tools::traits::tool::ToolDefinition;
+use crate::tool::traits::tool::ToolDefinition;
 
 /// Model information
 #[derive(Debug, Clone)]

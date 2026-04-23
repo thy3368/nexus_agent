@@ -1,5 +1,5 @@
 use crate::error::ToolError;
-use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

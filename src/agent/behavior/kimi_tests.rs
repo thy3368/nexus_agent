@@ -9,7 +9,7 @@ use crate::llm::adapter::kimi::KimiProvider;
 use crate::llm::traits::language_model::LanguageModel;
 
 use crate::permissions::PermissionManager;
-use crate::tools::tool_registry::ToolRegistry;
+use crate::tool::tool_registry::ToolRegistry;
 
 fn init_logging() {
     use tracing_subscriber::{fmt, EnvFilter};
@@ -35,7 +35,7 @@ async fn test_agent_with_kimi_example() {
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    tools.register(crate::tools::adapter::file_ops::FileListTool::new());
+    tools.register(crate::tool::adapter::file_ops::FileListTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;
@@ -88,7 +88,7 @@ async fn test_agent_kimi_multi_turn() {
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    tools.register(crate::tools::adapter::file_ops::FileListTool::new());
+    tools.register(crate::tool::adapter::file_ops::FileListTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;

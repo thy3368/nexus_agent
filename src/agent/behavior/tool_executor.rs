@@ -8,8 +8,8 @@ use crate::error::Result;
 use crate::formatter::ResponseFormatter;
 use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::safety::SafetyValidator;
-use crate::tools::tool_registry::ToolRegistry;
-use crate::tools::traits::tool::ToolContext;
+use crate::tool::tool_registry::ToolRegistry;
+use crate::tool::traits::tool::ToolContext;
 
 #[derive(Debug, Clone)]
 pub struct ToolCall {

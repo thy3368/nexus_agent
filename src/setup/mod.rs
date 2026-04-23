@@ -4,8 +4,8 @@ use crate::config::Config;
 use crate::llm::adapter::ollama::OllamaProvider;
 use crate::llm::adapter::openai::OpenAIProvider;
 use crate::llm::traits::language_model::LanguageModel;
-use crate::tools::adapter::{file_ops, git_ops, search_ops, shell, web_ops};
-use crate::tools::tool_registry::ToolRegistry;
+use crate::tool::adapter::{file_ops, git_ops, search_ops, shell, web_ops};
+use crate::tool::tool_registry::ToolRegistry;
 use std::sync::{Arc, Mutex};
 
 pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {

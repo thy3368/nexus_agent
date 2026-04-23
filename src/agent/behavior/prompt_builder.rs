@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::prompt::templates::TemplateManager;
-use crate::tools::tool_registry::ToolRegistry;
+use crate::tool::tool_registry::ToolRegistry;
 
 use super::context_provider::ContextProvider;
 

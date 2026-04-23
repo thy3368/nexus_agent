@@ -3,7 +3,7 @@
 use crate::error::{Result, ToolError};
 use async_trait::async_trait;
 
-use crate::tools::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use crate::util::diff::display_diff;
 use dialoguer::Confirm;
 

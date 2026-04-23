@@ -4,7 +4,7 @@ use crate::error::{ModelError, Result};
 use async_trait::async_trait;
 use serde_json::json;
 use crate::llm::traits::language_model::{AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage};
-use crate::tools::traits::tool::ToolDefinition;
+use crate::tool::traits::tool::ToolDefinition;
 
 pub struct GeminiProvider {
     api_key: String,

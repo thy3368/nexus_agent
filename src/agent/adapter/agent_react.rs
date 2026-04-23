@@ -15,7 +15,7 @@ use crate::agent::behavior::prompt_builder::SystemPromptBuilder;
 use crate::agent::behavior::tool_executor::ToolExecutor;
 use crate::agent::behavior::tool_parser::{ModelResponseParser, ParsedResponse};
 use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
-use crate::tools::tool_registry::ToolRegistry;
+use crate::tool::tool_registry::ToolRegistry;
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
