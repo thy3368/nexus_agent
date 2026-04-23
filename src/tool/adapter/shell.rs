@@ -1,10 +1,20 @@
 //! Shell command execution tool
 
-use crate::error::Result;
+use crate::error::{Result, ToolError};
+use crate::tool::traits::tool::{BoxToolFuture, Tool, ToolContext, ToolInvocation, ToolResult};
 use async_trait::async_trait;
+use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Instant;
 use tokio::process::Command;
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+
+#[derive(Debug, Clone)]
+struct ShellExecParams {
+    command: String,
+    workdir: PathBuf,
+    timeout_secs: u64,
+    login: bool,
+}
 
 /// Shell command execution tool
 pub struct ShellTool {
@@ -18,6 +28,50 @@ impl ShellTool {
 
     pub fn with_timeout(timeout_secs: u64) -> Self {
         Self { timeout_secs }
+    }
+
+    fn to_exec_params(
+        &self,
+        args: &serde_json::Value,
+        ctx: &ToolContext,
+    ) -> Result<ShellExecParams> {
+        let command = args
+            .get("command")
+            .or_else(|| args.get("cmd"))
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| ToolError::InvalidArgs("Missing command".to_string()))?
+            .to_string();
+
+        let workdir = args
+            .get("workdir")
+            .and_then(|value| value.as_str())
+            .map(|path| {
+                let path = PathBuf::from(path);
+                if path.is_absolute() {
+                    path
+                } else {
+                    ctx.working_dir.join(path)
+                }
+            })
+            .unwrap_or_else(|| ctx.working_dir.clone());
+
+        let timeout_secs = args
+            .get("timeout_ms")
+            .and_then(|value| value.as_u64())
+            .map(|ms| ms.div_ceil(1_000).max(1))
+            .unwrap_or(self.timeout_secs);
+
+        let login = args
+            .get("login")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        Ok(ShellExecParams {
+            command,
+            workdir,
+            timeout_secs,
+            login,
+        })
     }
 }
 
@@ -34,7 +88,7 @@ impl Tool for ShellTool {
     }
 
     fn description(&self) -> &str {
-        "Execute a shell command and return its output. Use for running system commands, listing files, searching, etc."
+        "Execute a shell command with optional workdir, timeout_ms, login shell, and justification. Returns stdout/stderr/exit metadata."
     }
 
     fn parameters(&self) -> serde_json::Value {
@@ -44,6 +98,27 @@ impl Tool for ShellTool {
                 "command": {
                     "type": "string",
                     "description": "The shell command to execute"
+                },
+                "cmd": {
+                    "type": "string",
+                    "description": "Alias for command"
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": "Directory to execute the command in. Relative paths resolve from the tool working directory."
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Execution timeout in milliseconds"
+                },
+                "login": {
+                    "type": "boolean",
+                    "description": "Use a login shell when supported"
+                },
+                "justification": {
+                    "type": "string",
+                    "description": "Optional reason for running the command"
                 }
             },
             "required": ["command"]
@@ -51,55 +126,97 @@ impl Tool for ShellTool {
     }
 
     fn is_read_only(&self) -> bool {
-        // Shell commands can be destructive, so not read-only
         false
     }
 
-    async fn execute(&self, args: serde_json::Value, ctx: &ToolContext, _config: &crate::config::Config) -> Result<ToolResult> {
-        let command = args["command"]
-            .as_str()
-            .ok_or_else(|| crate::error::ToolError::InvalidArgs("Missing command".to_string()))?;
+    fn is_mutating<'a>(&'a self, invocation: &'a ToolInvocation) -> BoxToolFuture<'a, bool> {
+        Box::pin(async move {
+            let command = invocation
+                .args
+                .get("command")
+                .or_else(|| invocation.args.get("cmd"))
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            !is_known_read_only_command(command)
+        })
+    }
 
-        tracing::info!("Executing shell command: {}", command);
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        ctx: &ToolContext,
+        _config: &crate::config::Config,
+    ) -> Result<ToolResult> {
+        let params = self.to_exec_params(&args, ctx)?;
 
-        // Determine shell based on OS
+        tracing::info!(command = %params.command, workdir = %params.workdir.display(), "executing shell command");
+
         let (shell, shell_arg) = if cfg!(target_os = "windows") {
             ("cmd", "/C")
+        } else if params.login {
+            ("sh", "-lc")
         } else {
             ("sh", "-c")
         };
 
-        // Execute command with timeout
+        let started = Instant::now();
         let output = tokio::time::timeout(
-            std::time::Duration::from_secs(self.timeout_secs),
+            std::time::Duration::from_secs(params.timeout_secs),
             Command::new(shell)
                 .arg(shell_arg)
-                .arg(command)
-                .current_dir(&ctx.working_dir)
+                .arg(&params.command)
+                .current_dir(&params.workdir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .output(),
         )
         .await
-        .map_err(|_| crate::error::ToolError::Timeout)??;
+        .map_err(|_| ToolError::Timeout)??;
 
+        let duration_ms = started.elapsed().as_millis() as u64;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let exit_code = output.status.code().unwrap_or(-1);
 
-        if output.status.success() {
-            Ok(ToolResult::success(stdout)
-                .with_metadata("exit_code", serde_json::json!(0))
-                .with_metadata("stderr", serde_json::json!(stderr)))
+        let result = if output.status.success() {
+            ToolResult::success(stdout.clone())
         } else {
-            let exit_code = output.status.code().unwrap_or(-1);
-            Ok(ToolResult::error(format!(
+            ToolResult::error(format!(
                 "Command failed with exit code {}: {}",
                 exit_code, stderr
             ))
+        };
+
+        Ok(result
             .with_metadata("exit_code", serde_json::json!(exit_code))
-            .with_metadata("stdout", serde_json::json!(stdout)))
-        }
+            .with_metadata("stdout", serde_json::json!(stdout))
+            .with_metadata("stderr", serde_json::json!(stderr))
+            .with_metadata("duration_ms", serde_json::json!(duration_ms))
+            .with_metadata("workdir", serde_json::json!(params.workdir)))
     }
+}
+
+fn is_known_read_only_command(command: &str) -> bool {
+    let first = command.split_whitespace().next().unwrap_or_default();
+    matches!(
+        first,
+        "cat"
+            | "cd"
+            | "find"
+            | "grep"
+            | "head"
+            | "ls"
+            | "pwd"
+            | "rg"
+            | "tail"
+            | "tree"
+            | "wc"
+            | "git"
+    ) && !command.contains(" > ")
+        && !command.contains(" >> ")
+        && !command.contains(" rm ")
+        && !command.contains(" mv ")
+        && !command.contains(" cp ")
 }
 
 #[cfg(test)]
@@ -112,19 +229,14 @@ mod tests {
         let ctx = ToolContext::default();
         let config = crate::config::Config::default();
 
-        let command = if cfg!(target_os = "windows") {
-            "echo hello"
-        } else {
-            "echo hello"
-        };
-
         let result = tool
-            .execute(serde_json::json!({"command": command}), &ctx, &config)
+            .execute(serde_json::json!({"command": "echo hello"}), &ctx, &config)
             .await
             .unwrap();
 
         assert!(result.success);
         assert!(result.output.contains("hello"));
+        assert!(result.metadata.contains_key("duration_ms"));
     }
 
     #[tokio::test]
@@ -151,7 +263,6 @@ mod tests {
         let ctx = ToolContext::default();
         let config = crate::config::Config::default();
 
-        // Command that takes longer than timeout
         let command = if cfg!(target_os = "windows") {
             "ping -n 6 127.0.0.1 > nul"
         } else {
@@ -163,5 +274,15 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_shell_read_only_classification() {
+        let tool = ShellTool::new();
+        let read = ToolInvocation::new("shell_execute", serde_json::json!({"command": "ls -la"}));
+        let write = ToolInvocation::new("shell_execute", serde_json::json!({"command": "rm file"}));
+
+        assert!(!tool.is_mutating(&read).await);
+        assert!(tool.is_mutating(&write).await);
     }
 }

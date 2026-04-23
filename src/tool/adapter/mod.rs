@@ -1,5 +1,10 @@
+pub mod apply_patch;
 pub mod file_ops;
 pub mod git_ops;
+pub mod image_ops;
+pub mod mcp;
 pub mod search_ops;
 pub mod shell;
+pub mod tool_search;
+pub mod unified_exec;
 pub mod web_ops;
