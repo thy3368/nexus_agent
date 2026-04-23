@@ -1,7 +1,7 @@
 //! Codebase search tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use async_trait::async_trait;
 use regex::Regex;
 use std::path::PathBuf;
@@ -92,7 +92,7 @@ impl Default for CodebaseSearchTool {
 }
 
 #[async_trait]
-impl Tool for CodebaseSearchTool {
+impl ToolHandler for CodebaseSearchTool {
     fn name(&self) -> &str {
         "codebase_search"
     }

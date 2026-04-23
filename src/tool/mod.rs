@@ -1,6 +1,6 @@
 //! Tool execution interface
 
-use crate::tool::traits::tool::Tool;
+use crate::tool::traits::tool_handler::ToolHandler;
 use serde::{Deserialize, Serialize};
 
 pub mod adapter;

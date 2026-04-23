@@ -1,12 +1,12 @@
 use crate::error::ToolError;
-use crate::tool::traits::tool::{Tool, ToolContext, ToolDefinition, ToolInvocation, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolDefinition, ToolInvocation, ToolResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Tool registry for managing available tools
 #[derive(Default)]
 pub struct ToolRegistry {
-    tools: HashMap<String, Arc<dyn Tool>>,
+    tools: HashMap<String, Arc<dyn ToolHandler>>,
 }
 
 impl ToolRegistry {
@@ -17,7 +17,7 @@ impl ToolRegistry {
     }
 
     /// Register a tool
-    pub fn register<T: Tool + 'static>(&mut self, tool: T) {
+    pub fn register<T: ToolHandler + 'static>(&mut self, tool: T) {
         let name = tool.name().to_string();
         if self.tools.insert(name.clone(), Arc::new(tool)).is_some() {
             tracing::warn!(tool = %name, "overwriting registered tool");
@@ -25,11 +25,11 @@ impl ToolRegistry {
     }
 
     /// Get a tool by name
-    pub fn get(&self, name: &str) -> Option<&dyn Tool> {
+    pub fn get(&self, name: &str) -> Option<&dyn ToolHandler> {
         self.tools.get(name).map(|t| t.as_ref())
     }
 
-    pub fn handler(&self, name: &str) -> Option<Arc<dyn Tool>> {
+    pub fn handler(&self, name: &str) -> Option<Arc<dyn ToolHandler>> {
         self.tools.get(name).map(Arc::clone)
     }
 
@@ -102,7 +102,7 @@ mod tests {
     struct TestTool;
 
     #[async_trait]
-    impl Tool for TestTool {
+    impl ToolHandler for TestTool {
         fn name(&self) -> &str {
             "test_tool"
         }

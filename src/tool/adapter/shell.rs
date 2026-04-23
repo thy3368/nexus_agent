@@ -1,7 +1,7 @@
 //! Shell command execution tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{BoxToolFuture, Tool, ToolContext, ToolInvocation, ToolResult};
+use crate::tool::traits::tool_handler::{BoxToolFuture, ToolHandler, ToolContext, ToolInvocation, ToolResult};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -91,7 +91,7 @@ impl Default for ShellTool {
 }
 
 #[async_trait]
-impl Tool for ShellTool {
+impl ToolHandler for ShellTool {
     fn name(&self) -> &str {
         "shell_execute"
     }

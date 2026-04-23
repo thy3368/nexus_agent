@@ -1,7 +1,7 @@
 //! Apply patch tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use async_trait::async_trait;
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
@@ -25,7 +25,7 @@ impl Default for ApplyPatchTool {
 }
 
 #[async_trait]
-impl Tool for ApplyPatchTool {
+impl ToolHandler for ApplyPatchTool {
     fn name(&self) -> &str {
         "apply_patch"
     }

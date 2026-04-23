@@ -157,7 +157,7 @@ pub type BoxToolFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// Tool trait for implementing actions
 /// 有哪些 /Users/hongyaotang/src/code_agent/codex/codex-rs/core/src/tools/下的 ToolHandler实现， 将它的能力迁移一价到 /Users/hongyaotang/src/code_agent/nexus_agent/src/tool/adapter
 #[async_trait]
-pub trait Tool: Send + Sync {
+pub trait ToolHandler: Send + Sync {
     /// Unique tool name
     fn name(&self) -> &str;
 

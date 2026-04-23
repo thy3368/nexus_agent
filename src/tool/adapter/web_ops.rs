@@ -1,7 +1,7 @@
 //! Web operation tools
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use async_trait::async_trait;
 
 /// Web GET tool.
@@ -22,7 +22,7 @@ impl Default for WebGetTool {
 }
 
 #[async_trait]
-impl Tool for WebGetTool {
+impl ToolHandler for WebGetTool {
     fn name(&self) -> &str {
         "web_get"
     }

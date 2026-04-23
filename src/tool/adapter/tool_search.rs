@@ -1,7 +1,7 @@
 //! Tool discovery search
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
@@ -37,7 +37,7 @@ impl Default for ToolSearchTool {
 }
 
 #[async_trait]
-impl Tool for ToolSearchTool {
+impl ToolHandler for ToolSearchTool {
     fn name(&self) -> &str {
         "tool_search"
     }

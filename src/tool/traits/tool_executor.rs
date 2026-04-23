@@ -9,7 +9,7 @@ use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::safety::SafetyValidator;
 use crate::tool::tool_registry::ToolRegistry;
 use crate::tool::traits::context_provider::ContextProvider;
-use crate::tool::traits::tool::{ToolContext, ToolInvocation};
+use crate::tool::traits::tool_handler::{ToolContext, ToolInvocation};
 
 #[derive(Debug, Clone)]
 pub struct ToolCall {

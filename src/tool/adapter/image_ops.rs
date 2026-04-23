@@ -1,7 +1,7 @@
 //! Image viewing tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use async_trait::async_trait;
 use base64::Engine;
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ impl Default for ViewImageTool {
 }
 
 #[async_trait]
-impl Tool for ViewImageTool {
+impl ToolHandler for ViewImageTool {
     fn name(&self) -> &str {
         "view_image"
     }

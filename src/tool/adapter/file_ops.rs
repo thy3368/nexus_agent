@@ -1,7 +1,7 @@
 //! File operation tools
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
 use crate::util::diff::display_diff;
 use async_trait::async_trait;
 use dialoguer::Confirm;
@@ -39,7 +39,7 @@ impl Default for FileReadTool {
 }
 
 #[async_trait]
-impl Tool for FileReadTool {
+impl ToolHandler for FileReadTool {
     fn name(&self) -> &str {
         "file_read"
     }
@@ -170,7 +170,7 @@ impl Default for FileWriteTool {
 }
 
 #[async_trait]
-impl Tool for FileWriteTool {
+impl ToolHandler for FileWriteTool {
     fn name(&self) -> &str {
         "file_write"
     }
@@ -280,7 +280,7 @@ impl Default for FileListTool {
 }
 
 #[async_trait]
-impl Tool for FileListTool {
+impl ToolHandler for FileListTool {
     fn name(&self) -> &str {
         "file_list"
     }
