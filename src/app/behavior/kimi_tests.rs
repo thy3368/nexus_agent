@@ -9,7 +9,11 @@ use crate::llm::adapter::kimi::KimiProvider;
 use crate::llm::traits::language_model::LanguageModel;
 
 use crate::permissions::PermissionManager;
-use crate::tool::adapter::file_ops::FileListTool;
+use crate::tool::adapter::file_ops::{FileListTool, FileReadTool, FileWriteTool};
+use crate::tool::adapter::shell::ShellTool;
+use crate::tool::adapter::git_ops::{GitStatusTool, GitDiffTool, GitCommitTool};
+use crate::tool::adapter::search_ops::CodebaseSearchTool;
+use crate::tool::adapter::web_ops::WebGetTool;
 use crate::tool::tool_registry::ToolRegistry;
 
 fn init_logging() {
@@ -36,8 +40,15 @@ async fn test_agent_with_kimi_example() {
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    //todo reg 所有的tool_handler
     tools.register(FileListTool::new());
+    tools.register(FileReadTool::new());
+    tools.register(FileWriteTool::new());
+    tools.register(ShellTool::new());
+    tools.register(GitStatusTool::new());
+    tools.register(GitDiffTool::new());
+    tools.register(GitCommitTool::new());
+    tools.register(CodebaseSearchTool::new());
+    tools.register(WebGetTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;
@@ -56,7 +67,9 @@ async fn test_agent_with_kimi_example() {
         .await
         .expect("Failed to create agent");
 
-    let task = "列出当前目录中的所有文件";
+    // let task = "列出当前目录中的所有文件, 一共有多少个文件，哪些文件有警告";
+    let task = "写个rust hello";
+
 
     match agent.execute_task(task.to_string()).await {
         Ok(result) => {
@@ -89,7 +102,15 @@ async fn test_agent_kimi_multi_turn() {
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
-    tools.register(crate::tool::adapter::file_ops::FileListTool::new());
+    tools.register(FileListTool::new());
+    tools.register(FileReadTool::new());
+    tools.register(FileWriteTool::new());
+    tools.register(ShellTool::new());
+    tools.register(GitStatusTool::new());
+    tools.register(GitDiffTool::new());
+    tools.register(GitCommitTool::new());
+    tools.register(CodebaseSearchTool::new());
+    tools.register(WebGetTool::new());
 
     let mut config = Config::default();
     config.safety.require_approval = false;
