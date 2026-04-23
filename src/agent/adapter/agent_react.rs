@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::agent::traits::agent_behavior::{Agent, AgentResult};
+use crate::agent::traits::agent_trait::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
 use crate::formatter::ResponseFormatter;
@@ -19,7 +19,7 @@ use crate::tool::tool_registry::ToolRegistry;
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
-pub struct AgentBehaviorReAct {
+pub struct AgentReAct {
     model: Box<dyn LanguageModel>,
     tool_executor: ToolExecutor,
     prompt_builder: SystemPromptBuilder,
@@ -29,7 +29,7 @@ pub struct AgentBehaviorReAct {
     conversation_history: Vec<AgentMessage>,
 }
 
-impl AgentBehaviorReAct {
+impl AgentReAct {
     /// Create a new agent
     pub async fn new(
         model: Box<dyn LanguageModel>,
@@ -100,7 +100,7 @@ impl AgentBehaviorReAct {
 }
 
 #[async_trait::async_trait]
-impl Agent for AgentBehaviorReAct {
+impl Agent for AgentReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
         tracing::info!("Starting agent run for task: {}", task);

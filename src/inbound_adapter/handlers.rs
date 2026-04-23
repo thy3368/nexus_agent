@@ -1,5 +1,5 @@
 use super::repl_session::ReplSession;
-use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::adapter::agent_react::AgentReAct;
 use crate::app::behavior::Agent;
 use crate::config::Config;
 use crate::setup;
@@ -71,7 +71,7 @@ pub async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
     let permission_manager = setup::create_permission_manager()?;
 
     let mut agent =
-        AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager).await?;
+        AgentReAct::new(model, tools, config, Vec::new(), permission_manager).await?;
 
     println!("Task: {}\n", task);
     let result = agent.execute_task(task.to_string()).await?;

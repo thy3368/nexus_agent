@@ -4,7 +4,7 @@
 use kameo::message::{Context, Message};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::adapter::agent_react::AgentReAct;
 use crate::app::behavior::{Agent, AgentResult};
 use crate::error;
 
@@ -13,7 +13,7 @@ use crate::error;
 pub struct RunTaskCmd(pub String);
 
 /// Handler for asynchronous task execution
-impl Message<RunTaskCmd> for AgentBehaviorReAct {
+impl Message<RunTaskCmd> for AgentReAct {
     type Reply = crate::Result<AgentResult>;
 
     async fn handle(
@@ -98,12 +98,12 @@ mod tests {
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+        let agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
             .await
             .unwrap();
 
         // Spawn the actor using kameo's spawn method
-        let actor_ref = AgentBehaviorReAct::spawn(agent);
+        let actor_ref = AgentReAct::spawn(agent);
 
         // Send message and await response
         let result = actor_ref
@@ -133,12 +133,12 @@ mod tests {
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
 
-        let agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+        let agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
             .await
             .unwrap();
 
         // Spawn the actor using kameo's spawn method
-        let actor_ref = AgentBehaviorReAct::spawn(agent);
+        let actor_ref = AgentReAct::spawn(agent);
 
         // Send message and await response
         let result = actor_ref

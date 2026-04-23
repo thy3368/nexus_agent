@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::llm::traits::language_model::{AgentMessage, LanguageModel};
 
 #[derive(Actor)]
-pub struct AgentBehaviorRalph {
+pub struct AgentRalph {
     model: Box<dyn LanguageModel>,
     tool_executor: ToolExecutor,
     prompt_builder: SystemPromptBuilder,

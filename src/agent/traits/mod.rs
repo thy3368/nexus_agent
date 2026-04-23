@@ -1,3 +1,3 @@
-pub mod agent_behavior;
+pub mod agent_trait;
 
-pub use agent_behavior::{Agent, AgentResult};
+pub use agent_trait::{Agent, AgentResult};

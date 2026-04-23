@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::agent::adapter::agent_react::AgentBehaviorReAct;
+use crate::agent::adapter::agent_react::AgentReAct;
 use crate::agent::traits::Agent;
 use crate::config::Config;
 use crate::llm::adapter::kimi::KimiProvider;
@@ -51,7 +51,7 @@ async fn test_agent_with_kimi_example() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+    let mut agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
         .await
         .expect("Failed to create agent");
 
@@ -104,7 +104,7 @@ async fn test_agent_kimi_multi_turn() {
         )
         .unwrap();
 
-    let mut agent = AgentBehaviorReAct::new(model, tools, config, Vec::new(), permission_manager)
+    let mut agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
         .await
         .expect("Failed to create agent");
 
