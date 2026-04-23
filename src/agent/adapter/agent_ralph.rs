@@ -1,5 +1,5 @@
-use crate::agent::behavior::prompt_builder::SystemPromptBuilder;
-use crate::agent::behavior::tool_executor::ToolExecutor;
+use crate::tool::traits::prompt_builder::SystemPromptBuilder;
+use crate::tool::traits::tool_executor::ToolExecutor;
 use crate::formatter::ResponseFormatter;
 use kameo::Actor;
 use crate::config::Config;

@@ -1,6 +1,6 @@
 use super::repl_session::ReplSession;
 use crate::agent::adapter::agent_react::AgentBehaviorReAct;
-use crate::agent::behavior::Agent;
+use crate::app::behavior::Agent;
 use crate::config::Config;
 use crate::setup;
 

@@ -1,6 +1,6 @@
 //! Tool call parser for extracting tool invocations from model responses
 
-use crate::agent::behavior::tool_executor::ToolCall;
+use crate::tool::traits::tool_executor::ToolCall;
 use serde_json;
 
 #[derive(Debug, Clone)]

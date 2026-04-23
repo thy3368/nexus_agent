@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 
 use crate::agent::adapter::agent_react::AgentBehaviorReAct;
-use crate::agent::behavior::Agent;
+use crate::app::behavior::Agent;
 use crate::commands::CommandHandler;
 use crate::config::Config;
 use crate::repl::ReplHelper;

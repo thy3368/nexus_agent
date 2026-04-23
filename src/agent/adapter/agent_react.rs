@@ -11,9 +11,9 @@ use crate::permissions::PermissionManager;
 use kameo::Actor;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::behavior::prompt_builder::SystemPromptBuilder;
-use crate::agent::behavior::tool_executor::ToolExecutor;
-use crate::agent::behavior::tool_parser::{ModelResponseParser, ParsedResponse};
+use crate::tool::traits::prompt_builder::SystemPromptBuilder;
+use crate::tool::traits::tool_executor::ToolExecutor;
+use crate::tool::traits::tool_parser::{ModelResponseParser, ParsedResponse};
 use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
 use crate::tool::tool_registry::ToolRegistry;
 

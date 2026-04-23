@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::prompt::templates::TemplateManager;
 use crate::tool::tool_registry::ToolRegistry;
 
-use super::context_provider::ContextProvider;
+use crate::tool::traits::context_provider::ContextProvider;
 
 pub struct SystemPromptBuilder {
     template_manager: TemplateManager,

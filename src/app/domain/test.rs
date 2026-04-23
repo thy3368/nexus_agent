@@ -27,7 +27,7 @@ impl Message<Inc> for Counter {
 mod tests {
     use kameo::prelude::Spawn;
 
-    use crate::agent::domain::test::{Counter, Inc};
+    use crate::app::domain::test::{Counter, Inc};
 
     #[tokio::test]
     async fn test_run_task_cmd_multiple_messages() {

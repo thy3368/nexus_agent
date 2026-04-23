@@ -5,9 +5,6 @@
 //! - `actor.rs`: Actix Actor adapter (interface/adapter layer)
 //! - `agent_int.rs`: Agent interface trait
 
-pub mod domain;
-
-pub mod behavior;
 pub mod traits;
 
 pub mod adapter;

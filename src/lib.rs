@@ -17,6 +17,8 @@ pub mod setup;
 pub mod tool;
 pub mod util;
 
+pub mod app;
+
 pub mod inbound_adapter;
 pub mod llm;
 

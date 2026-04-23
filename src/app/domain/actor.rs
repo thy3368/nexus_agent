@@ -5,7 +5,7 @@ use kameo::message::{Context, Message};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::adapter::agent_react::AgentBehaviorReAct;
-use crate::agent::behavior::{Agent, AgentResult};
+use crate::app::behavior::{Agent, AgentResult};
 use crate::error;
 
 /// Message for executing a task asynchronously via Actor

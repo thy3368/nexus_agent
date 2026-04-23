@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use super::context_provider::ContextProvider;
+use crate::tool::traits::context_provider::ContextProvider;
 use crate::config::Config;
 use crate::error::Result;
 use crate::formatter::ResponseFormatter;
