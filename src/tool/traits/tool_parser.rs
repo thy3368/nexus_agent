@@ -41,7 +41,7 @@ impl ModelResponseParser {
             return ParsedResponse::Complete;
         }
 
-        // Neither tool call nor FINISH
+        // Neither tool call nor FINISH,不应该出现
         ParsedResponse::Incomplete(content.to_string())
     }
 }

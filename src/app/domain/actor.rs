@@ -52,7 +52,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn chat(&self, _: &[AgentMessage]) -> error::Result<ModelReply> {
+        async fn do_chat(&self, _: &[AgentMessage]) -> error::Result<ModelReply> {
             let mut count = self.call_count.lock().unwrap();
             let response = self.responses[*count].clone();
             *count += 1;
@@ -71,7 +71,7 @@ mod tests {
             messages: &[AgentMessage],
             _: &[ToolDefinition],
         ) -> error::Result<ModelReply> {
-            self.chat(messages).await
+            self.do_chat(messages).await
         }
 
         fn model_info(&self) -> LlmInfo {

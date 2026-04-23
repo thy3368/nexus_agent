@@ -349,7 +349,7 @@ impl ToolHandler for FileListTool {
             .unwrap_or(0) as usize;
         let path = resolve_path(ctx, path_str);
 
-        tracing::info!(path = %path.display(), offset, limit, depth, "listing directory");
+        tracing::debug!(path = %path.display(), offset, limit, depth, "listing directory");
 
         if !path.exists() {
             return Ok(ToolResult::error(format!(

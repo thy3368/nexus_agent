@@ -51,15 +51,7 @@ impl ToolRegistry {
             .handler(&invocation.name)
             .ok_or_else(|| ToolError::NotFound(invocation.name.clone()))?;
 
-        if let Some(payload) = tool.pre_tool_use_payload(&invocation) {
-            tracing::debug!(tool = %payload.tool_name, command = %payload.command, "pre tool use");
-        }
-
         let result = tool.handle(invocation.clone(), ctx, config).await?;
-
-        if let Some(payload) = tool.post_tool_use_payload(&invocation, &result) {
-            tracing::debug!(tool = %payload.tool_name, response = %payload.command, "post tool use");
-        }
 
         Ok(result)
     }

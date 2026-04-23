@@ -64,10 +64,10 @@ impl LanguageModel for GeminiProvider {
 
         messages.push(AgentMessage::user(prompt));
 
-        self.chat(&messages).await
+        self.do_chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -140,7 +140,7 @@ impl LanguageModel for GeminiProvider {
     ) -> Result<ModelReply> {
         // For MVP, use regular chat
         // Gemini supports function calling but we'll implement it in Phase 2
-        self.chat(messages).await
+        self.do_chat(messages).await
     }
 
     fn model_info(&self) -> LlmInfo {

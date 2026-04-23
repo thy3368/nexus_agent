@@ -1,7 +1,7 @@
 // use crate::model::{ModelInfo, ToolDefinition};
+use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::tool::traits::tool_handler::ToolDefinition;
 
 /// Model information
 #[derive(Debug, Clone)]
@@ -12,7 +12,6 @@ pub struct LlmInfo {
     pub supports_tools: bool,
     pub supports_streaming: bool,
 }
-
 
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,8 +80,34 @@ pub trait LanguageModel: Send + Sync {
     ) -> crate::Result<ModelReply>;
 
     /// Generate a chat completion
-    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply>;
+    async fn do_chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply>;
 
+    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply> {
+        tracing::debug!("\n[LLM CHAT] === Input Messages (count: {}) ===", messages.len());
+        for (i, msg) in messages.iter().enumerate() {
+            tracing::debug!("[LLM CHAT] Message[{}] role={}", i, msg.role);
+            tracing::debug!("[LLM CHAT] Message[{}] content:\n{}", i, msg.content);
+        }
+        tracing::debug!("[LLM CHAT] === End Input ===\n");
+        
+        let result = self.do_chat(messages).await;
+        
+        match &result {
+            Ok(reply) => {
+                tracing::debug!("\n[LLM CHAT] === Output (model: {}) ===", reply.model);
+                tracing::debug!("[LLM CHAT] content (len={}):\n---START---\n{}\n---END---", reply.content.len(), reply.content);
+                if let Some(tool_calls) = &reply.tool_calls {
+                    tracing::debug!("[LLM CHAT] tool_calls: {:?}", tool_calls);
+                }
+                tracing::debug!("[LLM CHAT] === End Output ===\n");
+            }
+            Err(e) => {
+                tracing::error!("[LLM CHAT] === Error: {} ===", e);
+            }
+        }
+        
+        result
+    }
     /// Generate a chat completion with tool support
     async fn chat_with_tools(
         &self,

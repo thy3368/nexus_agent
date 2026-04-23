@@ -44,7 +44,7 @@ struct OllamaMessage {
 
 #[async_trait]
 impl LanguageModel for OllamaProvider {
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
         let url = format!("{}/api/chat", self.base_url);
 
         // Debug logging
@@ -113,7 +113,7 @@ impl LanguageModel for OllamaProvider {
             messages.push(AgentMessage::system(sys));
         }
         messages.push(AgentMessage::user(prompt));
-        self.chat(&messages).await
+        self.do_chat(&messages).await
     }
 
     async fn chat_with_tools(
@@ -122,7 +122,7 @@ impl LanguageModel for OllamaProvider {
         _tools: &[ToolDefinition],
     ) -> Result<ModelReply> {
         // For now, just ignore tools and chat normally
-        self.chat(messages).await
+        self.do_chat(messages).await
     }
 
     fn model_info(&self) -> LlmInfo {

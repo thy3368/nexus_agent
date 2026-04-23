@@ -56,15 +56,14 @@ async fn test_agent_with_kimi_example() {
         .expect("Failed to create agent");
 
     let task = "列出当前目录中的所有文件";
-    println!("\n📋 Task: {}", task);
 
     match agent.execute_task(task.to_string()).await {
         Ok(result) => {
             println!("\n✅ Task completed successfully!");
-            println!("  Success: {}", result.success);
-            println!("  Iterations: {}", result.iterations);
-            println!("  Tools used: {:?}", result.tool_calls);
-            println!("  Output:\n{}", result.output);
+            // println!("  Success: {}", result.success);
+            // println!("  Iterations: {}", result.iterations);
+            // println!("  Tools used: {:?}", result.tool_calls);
+            // println!("  Output:\n{}", result.output);
         }
         Err(e) => {
             eprintln!("\n❌ Task failed: {}", e);

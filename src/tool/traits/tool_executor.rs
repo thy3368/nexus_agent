@@ -45,19 +45,42 @@ impl ToolExecutor {
         }
     }
 
+    pub async fn execute(
+        &self,
+        tool_call: ToolCall,
+        config: &Config,
+    ) -> Result<ToolExecutionResult> {
+        tracing::debug!("[TOOL EXEC] Input name={}", tool_call.name);
+        tracing::debug!("[TOOL EXEC] Input args={}", tool_call.args);
+
+        let result = self.do_execute(tool_call, config).await;
+
+        match &result {
+            Ok(exec_result) => {
+                tracing::debug!("[TOOL EXEC] Output success={}", exec_result.success);
+                tracing::debug!("[TOOL EXEC] Output output={}", exec_result.output);
+                if let Some(ref err) = exec_result.error {
+                    tracing::debug!("[TOOL EXEC] Output error={}", err);
+                }
+            }
+            Err(e) => {
+                tracing::debug!("[TOOL EXEC] Failed: {}", e);
+            }
+        }
+
+        result
+    }
     /// Execute a tool call with permission and safety checks.
     ///
     /// The executor owns cross-cutting concerns only: permissions, safety validation,
     /// runtime context assembly and user-facing formatting. Actual argument validation,
     /// mutability classification and execution are delegated into the registry's
     /// ToolHandler-style dispatch path.
-    pub async fn execute(
+    pub async fn do_execute(
         &self,
         tool_call: ToolCall,
         config: &Config,
     ) -> Result<ToolExecutionResult> {
-        tracing::info!(tool = %tool_call.name, "executing tool");
-
         let invocation = ToolInvocation::new(tool_call.name.clone(), tool_call.args.clone());
 
         // Permission is checked before dispatch so potentially mutating tools cannot run
@@ -95,9 +118,7 @@ impl ToolExecutor {
                 return Err(crate::error::PromptLineError::Safety(reason));
             }
             crate::safety::ValidationResult::RequiresApproval => {}
-            crate::safety::ValidationResult::Allowed => {
-                tracing::debug!(tool = %tool_call.name, "tool call allowed by safety validator");
-            }
+            crate::safety::ValidationResult::Allowed => {}
         }
 
         let mut ctx = ToolContext::default();

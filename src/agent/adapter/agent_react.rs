@@ -11,11 +11,11 @@ use crate::permissions::PermissionManager;
 use kameo::Actor;
 use serde::{Deserialize, Serialize};
 
+use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
+use crate::tool::tool_registry::ToolRegistry;
 use crate::tool::traits::prompt_builder::SystemPromptBuilder;
 use crate::tool::traits::tool_executor::ToolExecutor;
 use crate::tool::traits::tool_parser::{ModelResponseParser, ParsedResponse};
-use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
-use crate::tool::tool_registry::ToolRegistry;
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
 #[derive(Actor)]
@@ -55,7 +55,7 @@ impl AgentReAct {
     }
 
     /// Initialize conversation with system prompt and task
-    async fn initialize_conversation(&mut self, task: &str) -> Result<()> {
+    async fn init_prompt(&mut self, task: &str) -> Result<()> {
         let system_prompt = self
             .prompt_builder
             .build(&self.config, &self.tool_executor.tools)
@@ -75,16 +75,9 @@ impl AgentReAct {
     }
 
     /// Get model response with loading indicator
-    async fn get_model_response(&self) -> Result<ModelReply> {
-        let mut loading = LoadingIndicator::new();
-        loading.start();
-        //todo 用 tracing  优化日志打印 打印 chat 入参 方便高度和审记
-        for (i, msg) in self.conversation_history.iter().enumerate() {
-            tracing::debug!("[{}] {}: {}", i, msg.role, msg.content);
-        }
+    async fn call_model(&self) -> Result<ModelReply> {
         let reply = self.model.chat(&self.conversation_history).await?;
-        loading.stop().await;
-        tracing::info!("Reply content: {:?}", reply.content);
+
         Ok(reply)
     }
 
@@ -103,24 +96,19 @@ impl AgentReAct {
 impl Agent for AgentReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
-        tracing::info!("Starting agent run for task: {}", task);
+        let task_preview: String = task.chars().take(80).collect::<String>();
 
         self.iteration_count = 0;
-        self.initialize_conversation(&task).await?;
+        self.init_prompt(&task).await?;
 
         let mut tool_calls = Vec::new();
 
-        // ReACT loop: Reason → Act → Observe → repeat
         loop {
             self.iteration_count += 1;
             self.check_iteration_limit()?;
 
-            tracing::debug!("Agent iteration: {}", self.iteration_count);
+            let response = self.call_model().await?;
 
-            // REASON: Get model response with reasoning
-            let response = self.get_model_response().await?;
-
-            // ACT: Parse and handle model response
             match ModelResponseParser::parse(&response.content) {
                 ParsedResponse::ToolCall(tool_call) => {
                     let result = self
@@ -130,7 +118,6 @@ impl Agent for AgentReAct {
 
                     tool_calls.push(tool_call.name.clone());
 
-                    // Special handling for file_write to show user what was written
                     if tool_call.name == "file_write" && result.success {
                         if let Some(content) =
                             tool_call.args.get("content").and_then(|c| c.as_str())
@@ -144,20 +131,27 @@ impl Agent for AgentReAct {
                         }
                     }
 
-                    // OBSERVE: Add tool result to conversation history
                     let observation =
                         format!("Tool '{}' result: {}", tool_call.name, result.output);
                     self.conversation_history
                         .push(AgentMessage::user(observation));
                 }
                 ParsedResponse::Complete => {
-                    tracing::info!("Task complete detected!");
+                    tracing::info!(
+                        iterations = self.iteration_count,
+                        tools_used = tool_calls.len(),
+                        "Task completed successfully"
+                    );
                     self.conversation_history
                         .push(AgentMessage::assistant(response.content.clone()));
                     return Ok(self.create_result(true, response.content, tool_calls));
                 }
                 ParsedResponse::Incomplete(_) => {
-                    // No valid tool call found and no FINISH - model gave free-form response
+                    let preview: String = response.content.chars().take(150).collect::<String>();
+                    tracing::warn!(
+                        response_preview = %preview,
+                        "Incomplete response - requesting tool call or FINISH"
+                    );
                     let prompt = format!(
                         "You said: \"{}\"\n\nPlease either:\n1. Use a tool to complete the task, OR\n2. Say FINISH if the task is done.",
                         response.content.chars().take(200).collect::<String>()
@@ -188,4 +182,3 @@ impl Agent for AgentReAct {
         self.conversation_history.push(message);
     }
 }
-

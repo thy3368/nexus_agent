@@ -1,11 +1,12 @@
 use crate::error::{ModelError, Result};
 use crate::llm::traits::language_model::{
-    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage, ToolCall,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 pub struct KimiProvider {
     api_key: String,
@@ -31,6 +32,81 @@ impl KimiProvider {
         self.max_tokens = max_tokens;
         self
     }
+
+    async fn do_chat_with_tools(
+        &self,
+        messages: &[AgentMessage],
+        tools: Option<Vec<KimiTool>>,
+    ) -> Result<ModelReply> {
+        let url = "https://api.moonshot.cn/v1/chat/completions";
+
+        let kimi_messages: Vec<KimiMessage> = messages
+            .iter()
+            .map(|msg| KimiMessage {
+                role: msg.role.clone(),
+                content: Some(msg.content.clone()),
+                tool_calls: None,
+            })
+            .collect();
+
+        let request = KimiRequest {
+            model: self.model.clone(),
+            messages: kimi_messages,
+            temperature: self.temperature,
+            max_tokens: self.max_tokens,
+            tools,
+        };
+
+        let response = self
+            .client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| ModelError::Request(e))?;
+
+        if !response.status().is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(ModelError::Api(format!("Kimi API error: {}", error_text)).into());
+        }
+
+        let kimi_resp: KimiResponse = response.json().await.map_err(|e| ModelError::Request(e))?;
+
+        let choice = kimi_resp
+            .choices
+            .first()
+            .ok_or_else(|| ModelError::InvalidResponse("No choices in response".to_string()))?;
+
+        let tool_calls = choice.message.tool_calls.as_ref().map(|calls| {
+            calls
+                .iter()
+                .map(|call| ToolCall {
+                    id: call.id.clone(),
+                    name: call.function.name.clone(),
+                    arguments: serde_json::from_str(&call.function.arguments).unwrap_or_else(|_| {
+                        json!({"raw_arguments": call.function.arguments.clone()})
+                    }),
+                })
+                .collect()
+        });
+
+        Ok(ModelReply {
+            content: choice.message.content.clone().unwrap_or_default(),
+            model: kimi_resp.model,
+            usage: TokenUsage {
+                prompt_tokens: kimi_resp.usage.prompt_tokens,
+                completion_tokens: kimi_resp.usage.completion_tokens,
+                total_tokens: kimi_resp.usage.total_tokens,
+            },
+            tool_calls,
+            finish_reason: Some(choice.finish_reason.clone()),
+        })
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -39,12 +115,45 @@ struct KimiRequest {
     messages: Vec<KimiMessage>,
     temperature: f32,
     max_tokens: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<KimiTool>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct KimiTool {
+    #[serde(rename = "type")]
+    tool_type: String,
+    function: KimiToolFunction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct KimiToolFunction {
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct KimiMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<KimiToolCall>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct KimiToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String,
+    function: KimiToolCallFunction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct KimiToolCallFunction {
+    name: String,
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,79 +188,31 @@ impl LanguageModel for KimiProvider {
             messages.push(AgentMessage::system(sys));
         }
         messages.push(AgentMessage::user(prompt));
-        self.chat(&messages).await
+        self.do_chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
-        let url = "https://api.moonshot.cn/v1/chat/completions";
-
-        let kimi_messages: Vec<KimiMessage> = messages
-            .iter()
-            .map(|msg| KimiMessage {
-                role: msg.role.clone(),
-                content: msg.content.clone(),
-            })
-            .collect();
-
-        let request = KimiRequest {
-            model: self.model.clone(),
-            messages: kimi_messages,
-            temperature: self.temperature,
-            max_tokens: self.max_tokens,
-        };
-
-        tracing::info!(
-            "Kimi Chat: URL={}, Model={}, Messages={}",
-            url,
-            self.model,
-            messages.len()
-        );
-
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| ModelError::Request(e))?;
-
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(ModelError::Api(format!("Kimi API error: {}", error_text)).into());
-        }
-
-        let kimi_resp: KimiResponse = response.json().await.map_err(|e| ModelError::Request(e))?;
-
-        let choice = kimi_resp
-            .choices
-            .first()
-            .ok_or_else(|| ModelError::InvalidResponse("No choices in response".to_string()))?;
-
-        Ok(ModelReply {
-            content: choice.message.content.clone(),
-            model: kimi_resp.model,
-            usage: TokenUsage {
-                prompt_tokens: kimi_resp.usage.prompt_tokens,
-                completion_tokens: kimi_resp.usage.completion_tokens,
-                total_tokens: kimi_resp.usage.total_tokens,
-            },
-            tool_calls: None,
-            finish_reason: Some(choice.finish_reason.clone()),
-        })
+    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+        self.do_chat_with_tools(messages, None).await
     }
 
     async fn chat_with_tools(
         &self,
         messages: &[AgentMessage],
-        _tools: &[ToolDefinition],
+        tools: &[ToolDefinition],
     ) -> Result<ModelReply> {
-        // For MVP, use regular chat without tool support
-        self.chat(messages).await
+        let kimi_tools: Vec<KimiTool> = tools
+            .iter()
+            .map(|tool| KimiTool {
+                tool_type: "function".to_string(),
+                function: KimiToolFunction {
+                    name: tool.name.clone(),
+                    description: tool.description.clone(),
+                    parameters: tool.parameters.clone(),
+                },
+            })
+            .collect();
+
+        self.do_chat_with_tools(messages, Some(kimi_tools)).await
     }
 
     fn model_info(&self) -> LlmInfo {
@@ -159,7 +220,7 @@ impl LanguageModel for KimiProvider {
             provider: "kimi".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
-            supports_tools: false,
+            supports_tools: true,
             supports_streaming: false,
         }
     }
@@ -208,7 +269,8 @@ mod tests {
             .iter()
             .map(|msg| KimiMessage {
                 role: msg.role.clone(),
-                content: msg.content.clone(),
+                content: Some(msg.content.clone()),
+                tool_calls: None,
             })
             .collect();
 
@@ -228,7 +290,7 @@ mod tests {
 
         let messages = vec![AgentMessage::user("你好，请用一句话介绍你自己")];
 
-        let response = provider.chat(&messages).await;
+        let response = provider.do_chat(&messages).await;
 
         match response {
             Ok(resp) => {
