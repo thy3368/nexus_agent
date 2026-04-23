@@ -54,14 +54,17 @@ async fn test_agent_with_kimi_example() {
     config.safety.require_approval = false;
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
-    permission_manager
-        .lock()
-        .unwrap()
-        .set_permission(
-            "file_list".to_string(),
-            crate::permissions::PermissionLevel::Always,
-        )
-        .unwrap();
+    let mut pm = permission_manager.lock().unwrap();
+    pm.set_permission("file_list".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("file_read".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("file_write".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("shell_execute".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_status".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_diff".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_commit".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("codebase_search".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("web_get".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    drop(pm);
 
     let mut agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
         .await
@@ -116,14 +119,17 @@ async fn test_agent_kimi_multi_turn() {
     config.safety.require_approval = false;
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
-    permission_manager
-        .lock()
-        .unwrap()
-        .set_permission(
-            "file_list".to_string(),
-            crate::permissions::PermissionLevel::Always,
-        )
-        .unwrap();
+    let mut pm = permission_manager.lock().unwrap();
+    pm.set_permission("file_list".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("file_read".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("file_write".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("shell_execute".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_status".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_diff".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("git_commit".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("codebase_search".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    pm.set_permission("web_get".to_string(), crate::permissions::PermissionLevel::Always).unwrap();
+    drop(pm);
 
     let mut agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
         .await
