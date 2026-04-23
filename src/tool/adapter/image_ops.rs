@@ -7,6 +7,8 @@ use base64::Engine;
 use std::path::{Path, PathBuf};
 
 /// Read a local image and return a data URL for multimodal callers.
+/// Usage: inspect screenshots, diagrams, or other local image assets from the workspace.
+/// 使用场景：需要让模型查看本地截图、图表或图片资源时使用。
 pub struct ViewImageTool;
 
 impl ViewImageTool {
@@ -62,13 +64,20 @@ impl Tool for ViewImageTool {
         let path_str = args["path"]
             .as_str()
             .ok_or_else(|| ToolError::InvalidArgs("Missing path".to_string()))?;
-        let detail = args.get("detail").and_then(|value| value.as_str()).unwrap_or("auto");
+        let detail = args
+            .get("detail")
+            .and_then(|value| value.as_str())
+            .unwrap_or("auto");
         let path = resolve_path(ctx, path_str);
-        let mime_type = image_mime_type(&path)
-            .ok_or_else(|| ToolError::InvalidArgs(format!("Unsupported image type: {}", path.display())))?;
+        let mime_type = image_mime_type(&path).ok_or_else(|| {
+            ToolError::InvalidArgs(format!("Unsupported image type: {}", path.display()))
+        })?;
 
         if !path.exists() {
-            return Ok(ToolResult::error(format!("Image not found: {}", path.display())));
+            return Ok(ToolResult::error(format!(
+                "Image not found: {}",
+                path.display()
+            )));
         }
         let metadata = tokio::fs::metadata(&path).await?;
         if !metadata.is_file() {
@@ -147,7 +156,11 @@ mod tests {
         let ctx = ToolContext::default();
         let config = crate::config::Config::default();
         let result = tool
-            .execute(serde_json::json!({"path": image_path.to_str().unwrap()}), &ctx, &config)
+            .execute(
+                serde_json::json!({"path": image_path.to_str().unwrap()}),
+                &ctx,
+                &config,
+            )
             .await;
 
         assert!(result.is_err());

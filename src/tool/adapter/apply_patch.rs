@@ -8,6 +8,8 @@ use std::path::{Component, Path, PathBuf};
 use tokio::process::Command;
 
 /// Patch-based file editing tool.
+/// Usage: apply precise multi-line edits, additions, or deletions when a full file overwrite is too broad.
+/// 使用场景：需要对文件做精确的多行修改、插入或删除时使用，适合替代整文件覆盖写入。
 pub struct ApplyPatchTool;
 
 impl ApplyPatchTool {
@@ -56,7 +58,10 @@ impl Tool for ApplyPatchTool {
             .ok_or_else(|| ToolError::InvalidArgs("Missing patch".to_string()))?;
         let summary = PatchSummary::from_patch(patch)?;
 
-        tracing::info!(changed_files = summary.changed_files.len(), "applying patch");
+        tracing::info!(
+            changed_files = summary.changed_files.len(),
+            "applying patch"
+        );
 
         let strip_level = if patch.contains("\n--- a/") || patch.starts_with("--- a/") {
             "-p1"
@@ -168,7 +173,10 @@ fn normalize_patch_path(path: &str) -> Result<PathBuf> {
         return Ok(PathBuf::from(path));
     }
 
-    let normalized = path.strip_prefix("a/").or_else(|| path.strip_prefix("b/")).unwrap_or(path);
+    let normalized = path
+        .strip_prefix("a/")
+        .or_else(|| path.strip_prefix("b/"))
+        .unwrap_or(path);
     let path_buf = PathBuf::from(normalized);
     validate_workspace_relative_path(&path_buf)?;
     Ok(path_buf)
@@ -176,10 +184,21 @@ fn normalize_patch_path(path: &str) -> Result<PathBuf> {
 
 fn validate_workspace_relative_path(path: &Path) -> Result<()> {
     if path.is_absolute() {
-        return Err(ToolError::InvalidArgs(format!("Absolute patch path is not allowed: {}", path.display())).into());
+        return Err(ToolError::InvalidArgs(format!(
+            "Absolute patch path is not allowed: {}",
+            path.display()
+        ))
+        .into());
     }
-    if path.components().any(|component| matches!(component, Component::ParentDir)) {
-        return Err(ToolError::InvalidArgs(format!("Patch path escapes workspace: {}", path.display())).into());
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err(ToolError::InvalidArgs(format!(
+            "Patch path escapes workspace: {}",
+            path.display()
+        ))
+        .into());
     }
     Ok(())
 }
@@ -191,7 +210,9 @@ mod tests {
 
     #[test]
     fn test_patch_summary_tracks_modified_file() {
-        let summary = PatchSummary::from_patch("--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new\n").unwrap();
+        let summary =
+            PatchSummary::from_patch("--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new\n")
+                .unwrap();
 
         assert_eq!(summary.changed_files, vec![PathBuf::from("file.txt")]);
         assert_eq!(summary.modified, 1);
@@ -224,6 +245,9 @@ mod tests {
             .unwrap();
 
         assert!(result.success, "{:?}", result.error);
-        assert_eq!(std::fs::read_to_string(temp_dir.path().join("file.txt")).unwrap(), "new\n");
+        assert_eq!(
+            std::fs::read_to_string(temp_dir.path().join("file.txt")).unwrap(),
+            "new\n"
+        );
     }
 }

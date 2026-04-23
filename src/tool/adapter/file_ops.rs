@@ -6,6 +6,7 @@ use crate::util::diff::display_diff;
 use async_trait::async_trait;
 use dialoguer::Confirm;
 use std::path::{Path, PathBuf};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 fn resolve_path(ctx: &ToolContext, path_str: &str) -> PathBuf {
     let path = PathBuf::from(path_str);
@@ -20,7 +21,9 @@ fn is_likely_binary(bytes: &[u8]) -> bool {
     bytes.contains(&0)
 }
 
-/// File read tool
+/// File read tool.
+/// Usage: inspect a text file or a bounded byte range without mutating the workspace.
+/// 使用场景：读取文本文件内容，或按偏移与长度读取局部内容，适合只读检查。
 pub struct FileReadTool;
 
 impl FileReadTool {
@@ -105,11 +108,17 @@ impl Tool for FileReadTool {
             return Ok(ToolResult::error(format!("Not a file: {}", path.display())));
         }
 
-        let bytes = tokio::fs::read(&path)
+        let mut file = tokio::fs::File::open(&path)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to open file: {}", e)))?;
+        let mut probe = vec![0u8; 8 * 1024];
+        let probe_bytes = file
+            .read(&mut probe)
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
+        probe.truncate(probe_bytes);
 
-        if is_likely_binary(&bytes) {
+        if is_likely_binary(&probe) {
             return Ok(ToolResult::error(format!(
                 "Binary file is not supported: {}",
                 path.display()
@@ -118,23 +127,34 @@ impl Tool for FileReadTool {
             .with_metadata("size", serde_json::json!(metadata.len())));
         }
 
-        let start = offset.min(bytes.len());
-        let end = start.saturating_add(limit).min(bytes.len());
-        let slice = &bytes[start..end];
-        let content = String::from_utf8_lossy(slice).to_string();
-        let truncated = end < bytes.len();
+        let file_len = metadata.len() as usize;
+        let start = offset.min(file_len);
+        file.seek(std::io::SeekFrom::Start(start as u64))
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to seek file: {}", e)))?;
+
+        let mut limited = vec![0u8; limit.min(file_len.saturating_sub(start))];
+        let bytes_read = file
+            .read(&mut limited)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to read file: {}", e)))?;
+        limited.truncate(bytes_read);
+        let content = String::from_utf8_lossy(&limited).to_string();
+        let truncated = start.saturating_add(bytes_read) < file_len;
 
         Ok(ToolResult::success(content)
             .with_metadata("path", serde_json::json!(path))
             .with_metadata("size", serde_json::json!(metadata.len()))
-            .with_metadata("bytes_read", serde_json::json!(slice.len()))
+            .with_metadata("bytes_read", serde_json::json!(bytes_read))
             .with_metadata("offset", serde_json::json!(start))
             .with_metadata("limit", serde_json::json!(limit))
             .with_metadata("truncated", serde_json::json!(truncated)))
     }
 }
 
-/// File write tool
+/// File write tool.
+/// Usage: create or replace a whole file when exact patch editing is not needed.
+/// 使用场景：需要新建文件或整文件重写时使用；如果只是局部改动，优先用 apply_patch。
 pub struct FileWriteTool;
 
 impl FileWriteTool {
@@ -242,7 +262,9 @@ struct ListedEntry {
     depth: usize,
 }
 
-/// File list tool
+/// File list tool.
+/// Usage: explore directory contents with pagination and optional shallow recursion.
+/// 使用场景：浏览目录结构、分页查看文件列表，或做浅层递归探索时使用。
 pub struct FileListTool;
 
 impl FileListTool {
@@ -397,11 +419,13 @@ async fn collect_entries(
 
     while let Some(entry) = read_dir.next_entry().await? {
         let path = entry.path();
-        let metadata = entry.metadata().await?;
-        let file_type = if metadata.is_dir() {
-            "dir"
-        } else if metadata.is_symlink() {
+        let metadata = tokio::fs::symlink_metadata(&path).await.map_err(|e| {
+            ToolError::ExecutionFailed(format!("Failed to stat {}: {}", path.display(), e))
+        })?;
+        let file_type = if metadata.file_type().is_symlink() {
             "link"
+        } else if metadata.is_dir() {
+            "dir"
         } else {
             "file"
         };
@@ -413,7 +437,7 @@ async fn collect_entries(
             depth: current_depth,
         });
 
-        if metadata.is_dir() && current_depth < max_depth {
+        if metadata.is_dir() && !metadata.file_type().is_symlink() && current_depth < max_depth {
             Box::pin(collect_entries(
                 root,
                 &path,

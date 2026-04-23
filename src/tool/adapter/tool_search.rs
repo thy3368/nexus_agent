@@ -14,6 +14,8 @@ pub struct ToolSearchEntry {
 }
 
 /// Tool search adapter. The registry owns the actual tool set; this adapter owns ranking and formatting.
+/// Usage: discover the right registered tool by capability instead of guessing tool names.
+/// 使用场景：不知道该调用哪个工具时，先按能力关键词搜索已注册工具。
 pub struct ToolSearchTool {
     entries: Vec<ToolSearchEntry>,
 }

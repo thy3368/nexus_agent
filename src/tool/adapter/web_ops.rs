@@ -4,7 +4,9 @@ use crate::error::{Result, ToolError};
 use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 
-/// Web Get tool
+/// Web GET tool.
+/// Usage: fetch public HTTP resources or API responses needed as read-only external context.
+/// 使用场景：获取公开网页或 API 响应内容，作为只读外部上下文输入。
 pub struct WebGetTool;
 
 impl WebGetTool {

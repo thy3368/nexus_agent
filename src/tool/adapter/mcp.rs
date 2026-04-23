@@ -5,6 +5,8 @@ use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 
 /// Skeleton MCP tool caller.
+/// Usage: reserve a stable adapter surface for MCP tool invocation before the runtime is implemented.
+/// 使用场景：为后续接入 MCP tool 调用保留稳定接口；当前 runtime 未接好时返回明确错误。
 pub struct McpTool;
 
 impl McpTool {
@@ -56,19 +58,31 @@ impl Tool for McpTool {
         _ctx: &ToolContext,
         _config: &crate::config::Config,
     ) -> Result<ToolResult> {
-        Ok(ToolResult::error("MCP runtime is not wired into Nexus yet".to_string())
-            .with_metadata("server", args.get("server").cloned().unwrap_or(serde_json::Value::Null))
-            .with_metadata("tool", args.get("tool").cloned().unwrap_or(serde_json::Value::Null))
-            .with_metadata(
-                "raw_arguments",
-                args.get("raw_arguments")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null),
-            ))
+        Ok(
+            ToolResult::error("MCP runtime is not wired into Nexus yet".to_string())
+                .with_metadata(
+                    "server",
+                    args.get("server")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )
+                .with_metadata(
+                    "tool",
+                    args.get("tool").cloned().unwrap_or(serde_json::Value::Null),
+                )
+                .with_metadata(
+                    "raw_arguments",
+                    args.get("raw_arguments")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                ),
+        )
     }
 }
 
 /// Skeleton MCP resource reader.
+/// Usage: model MCP resource reads through a dedicated read-only adapter once runtime support lands.
+/// 使用场景：为后续读取 MCP resource 建立只读工具入口；当前 runtime 未接好时返回明确错误。
 pub struct McpResourceTool;
 
 impl McpResourceTool {
@@ -120,8 +134,18 @@ impl Tool for McpResourceTool {
         _ctx: &ToolContext,
         _config: &crate::config::Config,
     ) -> Result<ToolResult> {
-        Ok(ToolResult::error("MCP resource runtime is not wired into Nexus yet".to_string())
-            .with_metadata("server", args.get("server").cloned().unwrap_or(serde_json::Value::Null))
-            .with_metadata("uri", args.get("uri").cloned().unwrap_or(serde_json::Value::Null)))
+        Ok(
+            ToolResult::error("MCP resource runtime is not wired into Nexus yet".to_string())
+                .with_metadata(
+                    "server",
+                    args.get("server")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )
+                .with_metadata(
+                    "uri",
+                    args.get("uri").cloned().unwrap_or(serde_json::Value::Null),
+                ),
+        )
     }
 }

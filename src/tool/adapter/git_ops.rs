@@ -5,7 +5,9 @@ use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 use tokio::process::Command;
 
-/// Git Status tool
+/// Git status tool.
+/// Usage: inspect modified, staged, and untracked files before planning edits or commits.
+/// 使用场景：在修改、提交或生成 PR 前检查工作区中已修改、已暂存和未跟踪文件。
 pub struct GitStatusTool;
 
 impl GitStatusTool {
@@ -67,7 +69,9 @@ impl Tool for GitStatusTool {
     }
 }
 
-/// Git Diff tool
+/// Git diff tool.
+/// Usage: review unstaged workspace changes globally or for a specific file.
+/// 使用场景：查看工作区未提交差异，可用于整体审查或定位某个文件的改动。
 pub struct GitDiffTool;
 
 impl GitDiffTool {
@@ -136,7 +140,9 @@ impl Tool for GitDiffTool {
     }
 }
 
-/// Git Commit tool
+/// Git commit tool.
+/// Usage: create a repository commit after the caller has approved committing current changes.
+/// 使用场景：用户明确批准提交后，用指定提交信息创建一次 git commit。
 pub struct GitCommitTool;
 
 impl GitCommitTool {

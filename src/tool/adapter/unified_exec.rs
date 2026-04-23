@@ -8,6 +8,13 @@ use std::process::Stdio;
 use std::time::Instant;
 use tokio::process::Command;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GitCommandAccess {
+    ReadOnly,
+    Mutating,
+    Unknown,
+}
+
 #[derive(Debug, Clone)]
 struct ExecCommandArgs {
     command: String,
@@ -20,6 +27,8 @@ struct ExecCommandArgs {
 }
 
 /// Codex-style unified exec command adapter.
+/// Usage: run structured command execution requests that may later evolve into session-based exec flows.
+/// 使用场景：需要以统一参数结构执行命令，且后续可能扩展为会话式 exec 流程时使用。
 pub struct ExecCommandTool {
     default_timeout_ms: u64,
 }
@@ -63,7 +72,10 @@ impl ExecCommandTool {
             .and_then(|value| value.as_str())
             .map(ToString::to_string);
         let yield_time_ms = args.get("yield_time_ms").and_then(|value| value.as_u64());
-        let tty = args.get("tty").and_then(|value| value.as_bool()).unwrap_or(false);
+        let tty = args
+            .get("tty")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
 
         Ok(ExecCommandArgs {
             command,
@@ -187,12 +199,21 @@ impl Tool for ExecCommandTool {
 
         let duration_ms = started.elapsed().as_millis() as u64;
         let exit_code = output.status.code().unwrap_or(-1);
-        let stdout = truncate_output(String::from_utf8_lossy(&output.stdout).to_string(), args.max_output_tokens);
-        let stderr = truncate_output(String::from_utf8_lossy(&output.stderr).to_string(), args.max_output_tokens);
+        let stdout = truncate_output(
+            String::from_utf8_lossy(&output.stdout).to_string(),
+            args.max_output_tokens,
+        );
+        let stderr = truncate_output(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+            args.max_output_tokens,
+        );
         let result = if output.status.success() {
             ToolResult::success(stdout.clone())
         } else {
-            ToolResult::error(format!("Command failed with exit code {}: {}", exit_code, stderr))
+            ToolResult::error(format!(
+                "Command failed with exit code {}: {}",
+                exit_code, stderr
+            ))
         };
 
         Ok(result
@@ -205,6 +226,8 @@ impl Tool for ExecCommandTool {
 }
 
 /// Reserved stdin continuation tool for the future process manager.
+/// Usage: keep the write-to-session API shape stable until interactive exec support is implemented.
+/// 使用场景：为未来交互式命令会话保留 stdin 写入口，当前仅作为占位接口。
 pub struct WriteStdinTool;
 
 impl WriteStdinTool {
@@ -252,13 +275,15 @@ impl Tool for WriteStdinTool {
         _ctx: &ToolContext,
         _config: &crate::config::Config,
     ) -> Result<ToolResult> {
-        Ok(ToolResult::error("Exec stdin sessions are not wired into Nexus yet".to_string())
-            .with_metadata(
-                "session_id",
-                args.get("session_id")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null),
-            ))
+        Ok(
+            ToolResult::error("Exec stdin sessions are not wired into Nexus yet".to_string())
+                .with_metadata(
+                    "session_id",
+                    args.get("session_id")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                ),
+        )
     }
 }
 
@@ -277,15 +302,90 @@ fn truncate_output(output: String, max_output_tokens: Option<usize>) -> String {
 }
 
 fn is_known_read_only_command(command: &str) -> bool {
-    let first = command.split_whitespace().next().unwrap_or_default();
+    let trimmed = command.trim();
+    if trimmed.is_empty()
+        || contains_shell_metacharacters(trimmed)
+        || contains_write_operators(trimmed)
+    {
+        return false;
+    }
+
+    let tokens = tokenize_command(trimmed);
+    let Some(first) = tokens.first().map(String::as_str) else {
+        return false;
+    };
+
+    match first {
+        "cat" | "cd" | "find" | "grep" | "head" | "ls" | "pwd" | "rg" | "tail" | "tree" | "wc" => {
+            true
+        }
+        "git" => classify_git_command(&tokens) == GitCommandAccess::ReadOnly,
+        _ => false,
+    }
+}
+
+fn contains_shell_metacharacters(command: &str) -> bool {
+    command.contains('|')
+        || command.contains('&')
+        || command.contains(';')
+        || command.contains('`')
+        || command.contains('$')
+        || command.contains('(')
+        || command.contains(')')
+        || command.contains('<')
+        || command.contains('\n')
+}
+
+fn contains_write_operators(command: &str) -> bool {
+    command.contains('>')
+        || command.contains(" rm ")
+        || command.starts_with("rm ")
+        || command.contains(" mv ")
+        || command.starts_with("mv ")
+        || command.contains(" cp ")
+        || command.starts_with("cp ")
+}
+
+fn tokenize_command(command: &str) -> Vec<String> {
+    command
+        .split_whitespace()
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn classify_git_command(tokens: &[String]) -> GitCommandAccess {
+    let Some(subcommand) = tokens.get(1).map(String::as_str) else {
+        return GitCommandAccess::Unknown;
+    };
+
+    match subcommand {
+        "status" | "diff" | "log" | "show" | "rev-parse" | "describe" | "remote" | "ls-files"
+        | "blame" | "grep" | "cat-file" | "branch" | "tag" => {
+            if tokens.iter().skip(2).any(|token| git_mutating_flag(token)) {
+                GitCommandAccess::Mutating
+            } else {
+                GitCommandAccess::ReadOnly
+            }
+        }
+        _ => GitCommandAccess::Mutating,
+    }
+}
+
+fn git_mutating_flag(token: &str) -> bool {
     matches!(
-        first,
-        "cat" | "cd" | "find" | "grep" | "head" | "ls" | "pwd" | "rg" | "tail" | "tree" | "wc" | "git"
-    ) && !command.contains(" > ")
-        && !command.contains(" >> ")
-        && !command.contains(" rm ")
-        && !command.contains(" mv ")
-        && !command.contains(" cp ")
+        token,
+        "-d" | "-D"
+            | "-m"
+            | "-M"
+            | "--delete"
+            | "--move"
+            | "--copy"
+            | "--edit-description"
+            | "--unset-upstream"
+            | "--set-upstream-to"
+            | "-f"
+            | "--force"
+    )
 }
 
 #[cfg(test)]

@@ -8,6 +8,13 @@ use std::process::Stdio;
 use std::time::Instant;
 use tokio::process::Command;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GitCommandAccess {
+    ReadOnly,
+    Mutating,
+    Unknown,
+}
+
 #[derive(Debug, Clone)]
 struct ShellExecParams {
     command: String,
@@ -16,7 +23,9 @@ struct ShellExecParams {
     login: bool,
 }
 
-/// Shell command execution tool
+/// Shell command execution tool.
+/// Usage: run workspace commands when no narrower purpose-built tool exists.
+/// 使用场景：需要运行构建、测试或项目命令，且没有更专用工具可用时使用。
 pub struct ShellTool {
     timeout_secs: u64,
 }
@@ -197,26 +206,90 @@ impl Tool for ShellTool {
 }
 
 fn is_known_read_only_command(command: &str) -> bool {
-    let first = command.split_whitespace().next().unwrap_or_default();
+    let trimmed = command.trim();
+    if trimmed.is_empty()
+        || contains_shell_metacharacters(trimmed)
+        || contains_write_operators(trimmed)
+    {
+        return false;
+    }
+
+    let tokens = tokenize_command(trimmed);
+    let Some(first) = tokens.first().map(String::as_str) else {
+        return false;
+    };
+
+    match first {
+        "cat" | "cd" | "find" | "grep" | "head" | "ls" | "pwd" | "rg" | "tail" | "tree" | "wc" => {
+            true
+        }
+        "git" => classify_git_command(&tokens) == GitCommandAccess::ReadOnly,
+        _ => false,
+    }
+}
+
+fn contains_shell_metacharacters(command: &str) -> bool {
+    command.contains('|')
+        || command.contains('&')
+        || command.contains(';')
+        || command.contains('`')
+        || command.contains('$')
+        || command.contains('(')
+        || command.contains(')')
+        || command.contains('<')
+        || command.contains('\n')
+}
+
+fn contains_write_operators(command: &str) -> bool {
+    command.contains('>')
+        || command.contains(" rm ")
+        || command.starts_with("rm ")
+        || command.contains(" mv ")
+        || command.starts_with("mv ")
+        || command.contains(" cp ")
+        || command.starts_with("cp ")
+}
+
+fn tokenize_command(command: &str) -> Vec<String> {
+    command
+        .split_whitespace()
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn classify_git_command(tokens: &[String]) -> GitCommandAccess {
+    let Some(subcommand) = tokens.get(1).map(String::as_str) else {
+        return GitCommandAccess::Unknown;
+    };
+
+    match subcommand {
+        "status" | "diff" | "log" | "show" | "rev-parse" | "describe" | "remote" | "ls-files"
+        | "blame" | "grep" | "cat-file" | "branch" | "tag" => {
+            if tokens.iter().skip(2).any(|token| git_mutating_flag(token)) {
+                GitCommandAccess::Mutating
+            } else {
+                GitCommandAccess::ReadOnly
+            }
+        }
+        _ => GitCommandAccess::Mutating,
+    }
+}
+
+fn git_mutating_flag(token: &str) -> bool {
     matches!(
-        first,
-        "cat"
-            | "cd"
-            | "find"
-            | "grep"
-            | "head"
-            | "ls"
-            | "pwd"
-            | "rg"
-            | "tail"
-            | "tree"
-            | "wc"
-            | "git"
-    ) && !command.contains(" > ")
-        && !command.contains(" >> ")
-        && !command.contains(" rm ")
-        && !command.contains(" mv ")
-        && !command.contains(" cp ")
+        token,
+        "-d" | "-D"
+            | "-m"
+            | "-M"
+            | "--delete"
+            | "--move"
+            | "--copy"
+            | "--edit-description"
+            | "--unset-upstream"
+            | "--set-upstream-to"
+            | "-f"
+            | "--force"
+    )
 }
 
 #[cfg(test)]

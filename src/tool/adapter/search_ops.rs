@@ -18,7 +18,9 @@ struct SearchOptions {
     case_sensitive: bool,
 }
 
-/// Codebase Search tool
+/// Codebase search tool.
+/// Usage: find source locations matching a regex before reading or editing specific files.
+/// 使用场景：按正则搜索代码位置，先定位相关文件和行，再决定是否读取或修改。
 pub struct CodebaseSearchTool;
 
 impl CodebaseSearchTool {
@@ -74,19 +76,12 @@ impl CodebaseSearchTool {
 
     async fn search_with_powershell(
         &self,
-        options: &SearchOptions,
-        ctx: &ToolContext,
+        _options: &SearchOptions,
+        _ctx: &ToolContext,
     ) -> Result<ToolResult> {
-        let script = build_powershell_script(options);
-        let output = Command::new("powershell")
-            .arg("-NoProfile")
-            .arg("-Command")
-            .arg(script)
-            .current_dir(&ctx.working_dir)
-            .output()
-            .await?;
-
-        build_search_result(output, options.limit)
+        Ok(ToolResult::error(
+            "PowerShell fallback is disabled until argument escaping is hardened".to_string(),
+        ))
     }
 }
 
@@ -178,8 +173,6 @@ impl Tool for CodebaseSearchTool {
                 command.arg("--glob").arg(format!("!{}", exclude));
             }
             command
-                .arg("--max-count")
-                .arg(options.limit.to_string())
                 .arg(&options.pattern)
                 .arg(&options.path)
                 .current_dir(&ctx.working_dir);
@@ -228,56 +221,21 @@ fn combined_includes(options: &SearchOptions) -> Vec<String> {
     includes
 }
 
-fn build_powershell_script(options: &SearchOptions) -> String {
-    let includes = combined_includes(options)
-        .into_iter()
-        .map(|glob| format!("'{}'", glob.replace('"', "`\"")))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let excludes = options
-        .exclude
-        .iter()
-        .map(|glob| format!("'{}'", glob.replace('"', "`\"")))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let case_flag = if options.case_sensitive { "" } else { "(?i)" };
-
-    format!(
-        r#"
-$includes = @({includes})
-$excludes = @({excludes})
-$files = Get-ChildItem -Path '{path}' -Recurse -File
-if ($includes.Count -gt 0) {{
-  $files = $files | Where-Object {{
-    $name = $_.FullName
-    $includes | Where-Object {{ $name -like $_ }}
-  }}
-}}
-if ($excludes.Count -gt 0) {{
-  $files = $files | Where-Object {{
-    $name = $_.FullName
-    -not ($excludes | Where-Object {{ $name -like $_ }})
-  }}
-}}
-$files | Select-String -Pattern '{case_flag}{pattern}' | Select-Object -First {limit} | ForEach-Object {{ "$($_.Path):$($_.LineNumber):$($_.Line)" }}
-"#,
-        includes = includes,
-        excludes = excludes,
-        path = options.path.display().to_string().replace('"', "`\""),
-        case_flag = case_flag,
-        pattern = options.pattern.replace('"', "`\""),
-        limit = options.limit,
-    )
-}
-
 fn build_search_result(output: std::process::Output, limit: usize) -> Result<ToolResult> {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     if output.status.success() || output.status.code() == Some(1) {
-        let matches = stdout.lines().count();
-        Ok(ToolResult::success(stdout)
-            .with_metadata("match_count", serde_json::json!(matches))
-            .with_metadata("limit", serde_json::json!(limit)))
+        let matches = stdout.lines().take(limit).collect::<Vec<_>>();
+        let truncated = stdout.lines().nth(limit).is_some();
+        let output = matches.join("\n");
+        Ok(ToolResult::success(if output.is_empty() {
+            output
+        } else {
+            format!("{}\n", output)
+        })
+        .with_metadata("match_count", serde_json::json!(matches.len()))
+        .with_metadata("limit", serde_json::json!(limit))
+        .with_metadata("truncated", serde_json::json!(truncated)))
     } else {
         Err(ToolError::ExecutionFailed(format!("Codebase search failed: {}", stderr)).into())
     }
