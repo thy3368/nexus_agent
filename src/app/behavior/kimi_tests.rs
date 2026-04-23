@@ -36,6 +36,7 @@ async fn test_agent_with_kimi_example() {
     let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
+    //todo reg 所有的tool_handler
     tools.register(FileListTool::new());
 
     let mut config = Config::default();
