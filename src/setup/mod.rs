@@ -4,7 +4,10 @@ use crate::config::Config;
 use crate::llm::adapter::ollama::OllamaProvider;
 use crate::llm::adapter::openai::OpenAIProvider;
 use crate::llm::traits::language_model::LanguageModel;
-use crate::tool::adapter::{file_ops, git_ops, search_ops, shell, web_ops};
+use crate::tool::adapter::{
+    apply_patch, file_ops, git_ops, image_ops, mcp, search_ops, shell, tool_search, unified_exec,
+    web_ops,
+};
 use crate::tool::tool_registry::ToolRegistry;
 use std::sync::{Arc, Mutex};
 
@@ -59,12 +62,31 @@ pub fn create_tools() -> ToolRegistry {
     tools.register(file_ops::FileReadTool::new());
     tools.register(file_ops::FileWriteTool::new());
     tools.register(file_ops::FileListTool::new());
+    tools.register(apply_patch::ApplyPatchTool::new());
     tools.register(shell::ShellTool::new());
     tools.register(git_ops::GitStatusTool::new());
     tools.register(git_ops::GitDiffTool::new());
     tools.register(git_ops::GitCommitTool::new());
     tools.register(web_ops::WebGetTool::new());
     tools.register(search_ops::CodebaseSearchTool::new());
+    tools.register(image_ops::ViewImageTool::new());
+    tools.register(mcp::McpTool::new());
+    tools.register(mcp::McpResourceTool::new());
+    tools.register(unified_exec::ExecCommandTool::new());
+    tools.register(unified_exec::WriteStdinTool::new());
+    tools.register(tool_search::ToolSearchTool::new(
+        tools
+            .definitions_with_metadata()
+            .into_iter()
+            .map(|definition| tool_search::ToolSearchEntry {
+                name: definition.name,
+                description: definition.description,
+                parameters: definition.parameters,
+                read_only: definition.read_only,
+                supports_parallel_calls: definition.supports_parallel_calls,
+            })
+            .collect(),
+    ));
     tools
 }
 

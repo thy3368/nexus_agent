@@ -39,7 +39,7 @@ mod tests {
     };
     use crate::permissions::PermissionManager;
     use crate::tool::tool_registry::ToolRegistry;
-    use crate::tool::traits::tool::ToolDefinition;
+    use crate::tool::traits::tool_handler::ToolDefinition;
 
     struct MockModel {
         responses: Vec<String>,

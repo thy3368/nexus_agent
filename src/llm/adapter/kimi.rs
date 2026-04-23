@@ -2,7 +2,7 @@ use crate::error::{ModelError, Result};
 use crate::llm::traits::language_model::{
     AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
 };
-use crate::tool::traits::tool::ToolDefinition;
+use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
