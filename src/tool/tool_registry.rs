@@ -1,12 +1,12 @@
 use crate::error::ToolError;
-use crate::tool::traits::tool::{Tool, ToolContext, ToolResult};
-use serde::{Deserialize, Serialize};
+use crate::tool::traits::tool::{Tool, ToolContext, ToolDefinition, ToolInvocation, ToolResult};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Tool registry for managing available tools
 #[derive(Default)]
 pub struct ToolRegistry {
-    tools: HashMap<String, Box<dyn Tool>>,
+    tools: HashMap<String, Arc<dyn Tool>>,
 }
 
 impl ToolRegistry {
@@ -18,12 +18,50 @@ impl ToolRegistry {
 
     /// Register a tool
     pub fn register<T: Tool + 'static>(&mut self, tool: T) {
-        self.tools.insert(tool.name().to_string(), Box::new(tool));
+        let name = tool.name().to_string();
+        if self.tools.insert(name.clone(), Arc::new(tool)).is_some() {
+            tracing::warn!(tool = %name, "overwriting registered tool");
+        }
     }
 
     /// Get a tool by name
     pub fn get(&self, name: &str) -> Option<&dyn Tool> {
         self.tools.get(name).map(|t| t.as_ref())
+    }
+
+    pub fn handler(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.get(name).map(Arc::clone)
+    }
+
+    pub async fn is_mutating(&self, invocation: &ToolInvocation) -> crate::Result<bool> {
+        let tool = self
+            .handler(&invocation.name)
+            .ok_or_else(|| ToolError::NotFound(invocation.name.clone()))?;
+        Ok(tool.is_mutating(invocation).await)
+    }
+
+    /// Dispatch through the ToolHandler-style path so validation, hooks and execution share one invocation object.
+    pub async fn dispatch(
+        &self,
+        invocation: ToolInvocation,
+        ctx: &ToolContext,
+        config: &crate::config::Config,
+    ) -> crate::Result<ToolResult> {
+        let tool = self
+            .handler(&invocation.name)
+            .ok_or_else(|| ToolError::NotFound(invocation.name.clone()))?;
+
+        if let Some(payload) = tool.pre_tool_use_payload(&invocation) {
+            tracing::debug!(tool = %payload.tool_name, command = %payload.command, "pre tool use");
+        }
+
+        let result = tool.handle(invocation.clone(), ctx, config).await?;
+
+        if let Some(payload) = tool.post_tool_use_payload(&invocation, &result) {
+            tracing::debug!(tool = %payload.tool_name, response = %payload.command, "post tool use");
+        }
+
+        Ok(result)
     }
 
     /// Execute a tool by name
@@ -34,12 +72,8 @@ impl ToolRegistry {
         ctx: &ToolContext,
         config: &crate::config::Config,
     ) -> crate::Result<ToolResult> {
-        let tool = self
-            .get(name)
-            .ok_or_else(|| ToolError::NotFound(name.to_string()))?;
-
-        tool.validate_args(&args)?;
-        tool.execute(args, ctx, config).await
+        self.dispatch(ToolInvocation::new(name, args), ctx, config)
+            .await
     }
 
     /// List all registered tools
@@ -47,9 +81,16 @@ impl ToolRegistry {
         self.tools.keys().map(|s| s.as_str()).collect()
     }
 
+    pub fn definitions_with_metadata(&self) -> Vec<ToolDefinition> {
+        self.tools.values().map(|t| t.definition()).collect()
+    }
+
     /// Get tool definitions for model
     pub fn definitions(&self) -> Vec<serde_json::Value> {
-        self.tools.values().map(|t| t.to_definition()).collect()
+        self.definitions_with_metadata()
+            .into_iter()
+            .map(|definition| definition.as_model_definition())
+            .collect()
     }
 }
 
