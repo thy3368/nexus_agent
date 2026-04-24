@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::llm::traits::language_model::AgentMessage;
+use serde::{Deserialize, Serialize};
 
 /// Agent execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]

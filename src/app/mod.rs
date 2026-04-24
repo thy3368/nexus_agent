@@ -1,2 +1,2 @@
-pub mod domain;
 pub mod behavior;
+pub mod domain;

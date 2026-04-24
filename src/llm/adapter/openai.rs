@@ -1,7 +1,9 @@
 //! OpenAI API provider implementation
 
 use crate::error::{ModelError, Result};
-use crate::llm::traits::language_model::{AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage};
+use crate::llm::traits::language_model::{
+    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+};
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 

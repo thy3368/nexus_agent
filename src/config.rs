@@ -23,6 +23,10 @@ pub struct Config {
     /// Agent behavior
     #[serde(default)]
     pub agent: AgentConfig,
+
+    /// Skill system configuration
+    #[serde(default)]
+    pub skills: SkillConfig,
 }
 
 /// Model provider configuration
@@ -178,12 +182,36 @@ pub struct AgentConfig {
     pub default_system_prompt_template: Option<String>,
 }
 
+/// Skill system configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    #[serde(default)]
+    pub roots: Vec<PathBuf>,
+
+    #[serde(default = "default_true")]
+    pub project_skills: bool,
+
+    #[serde(default = "default_true")]
+    pub user_skills: bool,
+
+    #[serde(default)]
+    pub disabled: Vec<String>,
+
+    #[serde(default = "default_skill_metadata_char_budget")]
+    pub metadata_char_budget: usize,
+
+    #[serde(default = "default_skill_injection_char_budget")]
+    pub injection_char_budget: usize,
+}
+
 impl Config {
     /// Load configuration from file
     pub fn load_from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            ConfigError::NotFound(format!("Failed to read config file: {}", e))
-        })?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::NotFound(format!("Failed to read config file: {}", e)))?;
 
         let mut config: Config = serde_yaml::from_str(&content)?;
 
@@ -225,7 +253,10 @@ impl Config {
                 if key.starts_with("${") && key.ends_with("}") {
                     let var_name = &key[2..key.len() - 1];
                     *key = std::env::var(var_name).map_err(|_| {
-                        ConfigError::Invalid(format!("Environment variable not found: {}", var_name))
+                        ConfigError::Invalid(format!(
+                            "Environment variable not found: {}",
+                            var_name
+                        ))
                     })?;
                 }
             }
@@ -248,6 +279,7 @@ impl Default for Config {
             tools: ToolPermissions::default(),
             safety: SafetyConfig::default(),
             agent: AgentConfig::default(),
+            skills: SkillConfig::default(),
         }
     }
 }
@@ -312,6 +344,20 @@ impl Default for AgentConfig {
     }
 }
 
+impl Default for SkillConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            roots: Vec::new(),
+            project_skills: true,
+            user_skills: true,
+            disabled: Vec::new(),
+            metadata_char_budget: default_skill_metadata_char_budget(),
+            injection_char_budget: default_skill_injection_char_budget(),
+        }
+    }
+}
+
 // Default value functions
 fn default_model() -> String {
     // Default model depends on provider
@@ -350,6 +396,14 @@ fn default_max_iterations() -> usize {
 
 fn default_mode() -> String {
     "plan".to_string()
+}
+
+fn default_skill_metadata_char_budget() -> usize {
+    8000
+}
+
+fn default_skill_injection_char_budget() -> usize {
+    20000
 }
 
 fn default_dangerous_commands() -> Vec<String> {
@@ -392,5 +446,16 @@ mod tests {
         let yaml = serde_yaml::to_string(&config).unwrap();
         let deserialized: Config = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(config.models.default, deserialized.models.default);
+    }
+
+    #[test]
+    fn test_config_without_skills_deserializes() {
+        let yaml = r#"
+models:
+  default: llama3
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.skills.enabled);
+        assert_eq!(config.skills.metadata_char_budget, 8000);
     }
 }

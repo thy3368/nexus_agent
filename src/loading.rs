@@ -47,7 +47,7 @@ impl LoadingIndicator {
     /// Start the loading indicator
     pub fn start(&mut self) {
         self.running.store(true, Ordering::SeqCst);
-        
+
         let current = Arc::clone(&self.current);
         let running = Arc::clone(&self.running);
 
@@ -55,7 +55,7 @@ impl LoadingIndicator {
             while running.load(Ordering::SeqCst) {
                 let idx = current.load(Ordering::SeqCst);
                 let message = LOADING_MESSAGES[idx % LOADING_MESSAGES.len()];
-                
+
                 // Clear line and print message
                 print!("\r{}", message);
                 use std::io::Write;
@@ -79,7 +79,7 @@ impl LoadingIndicator {
     /// Stop the loading indicator
     pub async fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
-        
+
         if let Some(handle) = self.handle.take() {
             handle.await.ok();
         }

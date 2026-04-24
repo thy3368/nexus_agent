@@ -1,5 +1,7 @@
 use crate::error::ToolError;
-use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolDefinition, ToolInvocation, ToolResult};
+use crate::tool::traits::tool_handler::{
+    ToolContext, ToolDefinition, ToolHandler, ToolInvocation, ToolResult,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 

@@ -8,10 +8,14 @@ use crate::commands::CommandHandler;
 use crate::config::Config;
 use crate::repl::ReplHelper;
 use crate::setup;
+use crate::skill::SkillManager;
+use std::sync::Arc;
 
 pub struct ReplSession {
     agent: AgentReAct,
     command_handler: CommandHandler,
+    config: Config,
+    skill_manager: Arc<SkillManager>,
 }
 
 impl ReplSession {
@@ -19,21 +23,29 @@ impl ReplSession {
         let model = setup::create_model(&config)?;
         let tools = setup::create_tools();
         let permission_manager = setup::create_permission_manager()?;
+        let skill_manager = setup::create_skill_manager(&config)?;
 
-        let agent = AgentReAct::new(
+        let agent = AgentReAct::new_with_skills(
             model,
             tools,
             config.clone(),
             Vec::new(),
             permission_manager.clone(),
+            Some(skill_manager.clone()),
         )
         .await?;
 
-        let command_handler = CommandHandler::new(config, permission_manager);
+        let command_handler = CommandHandler::new_with_skills(
+            config.clone(),
+            permission_manager,
+            Some(skill_manager.clone()),
+        );
 
         Ok(Self {
             agent,
             command_handler,
+            config,
+            skill_manager,
         })
     }
 
@@ -85,6 +97,16 @@ impl ReplSession {
                                     crate::commands::CommandAction::ReloadAgent => {
                                         println!("↻ Reloading agent...");
                                         return Ok(());
+                                    }
+                                    crate::commands::CommandAction::ReloadSkills => {
+                                        let cwd = std::env::current_dir()?;
+                                        let outcome =
+                                            self.skill_manager.reload(&self.config, &cwd)?;
+                                        println!(
+                                            "✓ Reloaded {} skills ({} errors)",
+                                            outcome.skills.len(),
+                                            outcome.errors.len()
+                                        );
                                     }
                                     crate::commands::CommandAction::None => {}
                                 }

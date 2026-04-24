@@ -31,14 +31,20 @@ impl SafetyValidator {
         // Check denied commands
         if let Some(denied_commands) = &self.config.safety.denied_commands {
             if denied_commands.iter().any(|c| command.starts_with(c)) {
-                return ValidationResult::Denied(format!("Command is in the denied list: {}", command));
+                return ValidationResult::Denied(format!(
+                    "Command is in the denied list: {}",
+                    command
+                ));
             }
         }
 
         // Check allowed commands
         if let Some(allowed_commands) = &self.config.safety.allowed_commands {
             if !allowed_commands.iter().any(|c| command.starts_with(c)) {
-                return ValidationResult::Denied(format!("Command is not in the allowed list: {}", command));
+                return ValidationResult::Denied(format!(
+                    "Command is not in the allowed list: {}",
+                    command
+                ));
             }
         }
 

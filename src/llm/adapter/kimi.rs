@@ -88,9 +88,9 @@ impl KimiProvider {
                 .map(|call| ToolCall {
                     id: call.id.clone(),
                     name: call.function.name.clone(),
-                    arguments: serde_json::from_str(&call.function.arguments).unwrap_or_else(|_| {
-                        json!({"raw_arguments": call.function.arguments.clone()})
-                    }),
+                    arguments: serde_json::from_str(&call.function.arguments).unwrap_or_else(
+                        |_| json!({"raw_arguments": call.function.arguments.clone()}),
+                    ),
                 })
                 .collect()
         });

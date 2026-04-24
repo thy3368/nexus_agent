@@ -1,9 +1,9 @@
 //! Context management for PromptLine
 
 use crate::error::Result;
+use crate::llm::traits::language_model::AgentMessage;
 use std::path::PathBuf;
 use tokio::fs;
-use crate::llm::traits::language_model::AgentMessage;
 
 const HISTORY_FILE_NAME: &str = "history.json";
 
@@ -101,7 +101,10 @@ mod tests {
             context_dir: temp_dir.path().to_path_buf(),
         };
 
-        let messages = vec![AgentMessage::user("Hello"), AgentMessage::assistant("Hi there")];
+        let messages = vec![
+            AgentMessage::user("Hello"),
+            AgentMessage::assistant("Hi there"),
+        ];
 
         // Save history
         manager.save_history(&messages).await.unwrap();

@@ -1,4 +1,4 @@
 pub mod gemini;
-pub mod openai;
-pub mod ollama;
 pub mod kimi;
+pub mod ollama;
+pub mod openai;

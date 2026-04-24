@@ -6,10 +6,9 @@ use crate::agent::traits::agent_trait::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
 use crate::formatter::ResponseFormatter;
-use crate::loading::LoadingIndicator;
 use crate::permissions::PermissionManager;
+use crate::skill::SkillManager;
 use kameo::Actor;
-use serde::{Deserialize, Serialize};
 
 use crate::llm::traits::language_model::{AgentMessage, LanguageModel, ModelReply};
 use crate::tool::tool_registry::ToolRegistry;
@@ -27,6 +26,7 @@ pub struct AgentReAct {
     formatter: ResponseFormatter,
     iteration_count: usize,
     conversation_history: Vec<AgentMessage>,
+    skill_manager: Option<Arc<SkillManager>>,
 }
 
 impl AgentReAct {
@@ -37,6 +37,26 @@ impl AgentReAct {
         config: Config,
         conversation_history: Vec<AgentMessage>,
         permission_manager: Arc<Mutex<PermissionManager>>,
+    ) -> Result<Self> {
+        Self::new_with_skills(
+            model,
+            tools,
+            config,
+            conversation_history,
+            permission_manager,
+            None,
+        )
+        .await
+    }
+
+    /// Create a new agent with optional skill support
+    pub async fn new_with_skills(
+        model: Box<dyn LanguageModel>,
+        tools: ToolRegistry,
+        config: Config,
+        conversation_history: Vec<AgentMessage>,
+        permission_manager: Arc<Mutex<PermissionManager>>,
+        skill_manager: Option<Arc<SkillManager>>,
     ) -> Result<Self> {
         let safety_validator = crate::safety::SafetyValidator::new(config.clone())?;
         let prompt_builder = SystemPromptBuilder::new().await?;
@@ -51,14 +71,23 @@ impl AgentReAct {
             formatter,
             iteration_count: 0,
             conversation_history,
+            skill_manager,
         })
     }
 
     /// Initialize conversation with system prompt and task
     async fn init_prompt(&mut self, task: &str) -> Result<()> {
+        let skill_context = self
+            .skill_manager
+            .as_ref()
+            .map(|manager| manager.render_prompt_context(&self.config, task));
         let system_prompt = self
             .prompt_builder
-            .build(&self.config, &self.tool_executor.tools)
+            .build_with_skills(
+                &self.config,
+                &self.tool_executor.tools,
+                skill_context.as_ref(),
+            )
             .await?;
         self.conversation_history
             .push(AgentMessage::system(system_prompt));
@@ -96,8 +125,6 @@ impl AgentReAct {
 impl Agent for AgentReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
-        let task_preview: String = task.chars().take(80).collect::<String>();
-
         self.iteration_count = 0;
         self.init_prompt(&task).await?;
 

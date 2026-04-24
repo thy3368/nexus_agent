@@ -5,8 +5,3 @@ use serde::{Deserialize, Serialize};
 pub mod traits;
 
 pub mod adapter;
-
-
-
-
-

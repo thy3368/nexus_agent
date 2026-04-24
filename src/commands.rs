@@ -4,6 +4,7 @@
 
 use crate::config::Config;
 use crate::permissions::PermissionManager;
+use crate::skill::SkillManager;
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
 
@@ -20,6 +21,7 @@ pub enum CommandAction {
     Quit,
     ClearHistory,
     ReloadAgent,
+    ReloadSkills,
 }
 
 impl CommandOutput {
@@ -43,8 +45,9 @@ pub enum SlashCommand {
     Settings,
     Clear,
     Status,
-    Model(Option<Vec<String>>), // Optional args
+    Model(Option<Vec<String>>),       // Optional args
     Permissions(Option<Vec<String>>), // Optional args
+    Skills(Option<Vec<String>>),
     Quit,
     Version,
 }
@@ -53,6 +56,7 @@ pub enum SlashCommand {
 pub struct CommandHandler {
     config: Config,
     permissions: Arc<Mutex<PermissionManager>>,
+    skill_manager: Option<Arc<SkillManager>>,
 }
 
 impl CommandHandler {
@@ -61,6 +65,19 @@ impl CommandHandler {
         Self {
             config,
             permissions,
+            skill_manager: None,
+        }
+    }
+
+    pub fn new_with_skills(
+        config: Config,
+        permissions: Arc<Mutex<PermissionManager>>,
+        skill_manager: Option<Arc<SkillManager>>,
+    ) -> Self {
+        Self {
+            config,
+            permissions,
+            skill_manager,
         }
     }
 
@@ -90,6 +107,7 @@ impl CommandHandler {
             "/status" => Some(SlashCommand::Status),
             "/model" => Some(SlashCommand::Model(args)),
             "/permissions" | "/perms" => Some(SlashCommand::Permissions(args)),
+            "/skills" | "/skill" => Some(SlashCommand::Skills(args)),
             "/quit" | "/exit" | "/q" => Some(SlashCommand::Quit),
             "/version" | "/v" => Some(SlashCommand::Version),
             _ => None,
@@ -101,12 +119,22 @@ impl CommandHandler {
         match command {
             SlashCommand::Help => Ok(CommandOutput::new(self.help())),
             SlashCommand::Settings => Ok(CommandOutput::new(self.settings())),
-            SlashCommand::Clear => Ok(CommandOutput::new("Session cleared.").with_action(CommandAction::ClearHistory)),
+            SlashCommand::Clear => {
+                Ok(CommandOutput::new("Session cleared.").with_action(CommandAction::ClearHistory))
+            }
             SlashCommand::Status => Ok(CommandOutput::new(self.status())),
             SlashCommand::Model(args) => self.handle_model(args),
-            SlashCommand::Permissions(args) => Ok(CommandOutput::new(self.handle_permissions(args)?)),
-            SlashCommand::Quit => Ok(CommandOutput::new("Goodbye! 👋").with_action(CommandAction::Quit)),
-            SlashCommand::Version => Ok(CommandOutput::new(format!("PromptLine v{}", crate::VERSION))),
+            SlashCommand::Permissions(args) => {
+                Ok(CommandOutput::new(self.handle_permissions(args)?))
+            }
+            SlashCommand::Skills(args) => self.handle_skills(args),
+            SlashCommand::Quit => {
+                Ok(CommandOutput::new("Goodbye! 👋").with_action(CommandAction::Quit))
+            }
+            SlashCommand::Version => Ok(CommandOutput::new(format!(
+                "PromptLine v{}",
+                crate::VERSION
+            ))),
         }
     }
 
@@ -122,6 +150,7 @@ Available slash commands:
   /status       Show current configuration
   /model        Show model information
   /permissions  Manage tool permissions
+  /skills       List and reload available skills
   /quit         Exit PromptLine
   /version      Show version info
 
@@ -130,7 +159,9 @@ Aliases:
   /q → /quit
   /v → /version
   /perms → /permissions
-"#.to_string()
+  /skill → /skills
+"#
+        .to_string()
     }
 
     /// Show settings
@@ -176,11 +207,15 @@ Aliases:
                     if args.len() < 2 {
                         return Ok(CommandOutput::new("Usage: /model set <provider> [model]\nExample: /model set openai gpt-4"));
                     }
-                    let provider = args[1].to_lowercase()
-                        .trim_matches(|c| c == '<' || c == '>' || c == '[' || c == ']').to_string();
+                    let provider = args[1]
+                        .to_lowercase()
+                        .trim_matches(|c| c == '<' || c == '>' || c == '[' || c == ']')
+                        .to_string();
                     let model = if args.len() > 2 {
-                        args[2].clone()
-                            .trim_matches(|c| c == '<' || c == '>' || c == '[' || c == ']').to_string()
+                        args[2]
+                            .clone()
+                            .trim_matches(|c| c == '<' || c == '>' || c == '[' || c == ']')
+                            .to_string()
                     } else {
                         // Default models if not specified
                         match provider.as_str() {
@@ -194,42 +229,51 @@ Aliases:
                     // Update config
                     self.config.models.default = model.clone();
                     // We might need to store the active provider separately if it's not just inferred from the model
-                    // For now, we assume the environment variable PROMPTLINE_PROVIDER drives it, 
+                    // For now, we assume the environment variable PROMPTLINE_PROVIDER drives it,
                     // OR we update the config to explicitly store the active provider.
                     // The current Config struct doesn't have an "active_provider" field, it just has "default" model.
                     // But main.rs uses PROMPTLINE_PROVIDER env var.
                     // We should probably update main.rs to look at config first.
-                    
+
                     // Let's assume we set the env var for the current process so main.rs picks it up?
                     // Or better, we persist it in the config if we add a field.
                     // For now, let's just set the default model.
-                    
+
                     // To switch provider, we really need to know which provider "gpt-4" belongs to.
-                    // Let's update the config to have an `active_provider` field? 
+                    // Let's update the config to have an `active_provider` field?
                     // Or just rely on the user setting it.
-                    
+
                     // Actually, let's set the env var for this process
                     std::env::set_var("PROMPTLINE_PROVIDER", &provider);
-                    
+
                     // Save config
                     if let Ok(path) = self.get_config_path() {
                         let _ = self.config.save_to_file(&path);
                     }
 
-                    return Ok(CommandOutput::new(format!("✓ Switched to {} ({})", provider, model))
-                        .with_action(CommandAction::ReloadAgent));
+                    return Ok(CommandOutput::new(format!(
+                        "✓ Switched to {} ({})",
+                        provider, model
+                    ))
+                    .with_action(CommandAction::ReloadAgent));
                 }
                 "config" => {
                     // /model config <provider> key <value>
                     // /model config <provider> url <value>
                     if args.len() < 4 {
-                        return Ok(CommandOutput::new("Usage: /model config <provider> <key|url> <value>"));
+                        return Ok(CommandOutput::new(
+                            "Usage: /model config <provider> <key|url> <value>",
+                        ));
                     }
                     let provider_name = args[1].to_lowercase();
                     let setting = args[2].to_lowercase();
                     let value = args[3].clone();
 
-                    let provider_config = self.config.models.providers.entry(provider_name.clone())
+                    let provider_config = self
+                        .config
+                        .models
+                        .providers
+                        .entry(provider_name.clone())
                         .or_insert_with(|| crate::config::ProviderConfig {
                             api_key: None,
                             models: vec![],
@@ -252,13 +296,21 @@ Aliases:
                         let _ = self.config.save_to_file(&path);
                     }
 
-                    return Ok(CommandOutput::new(format!("✓ Updated {} configuration", provider_name))
-                        .with_action(CommandAction::ReloadAgent));
+                    return Ok(CommandOutput::new(format!(
+                        "✓ Updated {} configuration",
+                        provider_name
+                    ))
+                    .with_action(CommandAction::ReloadAgent));
                 }
-                _ => return Ok(CommandOutput::new(format!("Unknown subcommand: {}", subcommand))),
+                _ => {
+                    return Ok(CommandOutput::new(format!(
+                        "Unknown subcommand: {}",
+                        subcommand
+                    )))
+                }
             }
         }
-        
+
         Ok(CommandOutput::new(self.model_info()))
     }
 
@@ -276,12 +328,76 @@ Aliases:
 
     /// Show model info
     fn model_info(&self) -> String {
-        let provider = std::env::var("PROMPTLINE_PROVIDER").unwrap_or_else(|_| "openai".to_string());
+        let provider =
+            std::env::var("PROMPTLINE_PROVIDER").unwrap_or_else(|_| "openai".to_string());
         format!(
             "\n🤖 Model Information\n\nProvider: {}\nDefault Model: {}\n\nUsage:\n  /model set <provider> [model]\n  /model config <provider> key <value>\n  /model config <provider> url <value>\n",
             provider,
             self.config.models.default
         )
+    }
+
+    fn handle_skills(&self, args: Option<Vec<String>>) -> Result<CommandOutput> {
+        let Some(manager) = &self.skill_manager else {
+            return Ok(CommandOutput::new(
+                "Skills are unavailable in this session.",
+            ));
+        };
+
+        let subcommand = args
+            .as_ref()
+            .and_then(|args| args.first())
+            .map(|arg| arg.to_lowercase())
+            .unwrap_or_else(|| "list".to_string());
+
+        match subcommand.as_str() {
+            "list" => Ok(CommandOutput::new(self.skills_list(manager))),
+            "errors" => Ok(CommandOutput::new(self.skills_errors(manager))),
+            "reload" => {
+                Ok(CommandOutput::new("Reloading skills...")
+                    .with_action(CommandAction::ReloadSkills))
+            }
+            other => Ok(CommandOutput::new(format!(
+                "Unknown skills subcommand: {}\nUsage: /skills [list|errors|reload]",
+                other
+            ))),
+        }
+    }
+
+    fn skills_list(&self, manager: &SkillManager) -> String {
+        let skills = manager.skills();
+        if skills.is_empty() {
+            return "\nNo skills loaded. Add SKILL.md directories under .promptline/skills or configure skills.roots.".to_string();
+        }
+
+        let mut output = String::from("\nSkills\n\n");
+        for skill in skills {
+            output.push_str(&format!(
+                "  • {} [{}]\n    {}\n    {}\n",
+                skill.name,
+                skill.scope,
+                skill.display_description(),
+                skill.skill_md_path.display()
+            ));
+        }
+        output
+    }
+
+    fn skills_errors(&self, manager: &SkillManager) -> String {
+        let errors = manager.errors();
+        if errors.is_empty() {
+            return "\nNo skill load errors.".to_string();
+        }
+
+        let mut output = String::from("\nSkill load errors\n\n");
+        for error in errors {
+            output.push_str(&format!(
+                "  • {}\n    {}\n",
+                error.path.display(),
+                error.message
+            ));
+        }
+        output
     }
 
     /// Handle permissions command
@@ -290,22 +406,27 @@ Aliases:
             if args.len() >= 2 {
                 let tool = &args[0];
                 let level_str = &args[1].to_lowercase();
-                
+
                 let level = match level_str.as_str() {
                     "allow" | "always" => crate::permissions::PermissionLevel::Always,
                     "deny" | "never" | "block" => crate::permissions::PermissionLevel::Never,
                     "ask" | "prompt" => crate::permissions::PermissionLevel::Ask,
                     "once" => crate::permissions::PermissionLevel::Once,
-                    _ => return Ok(format!("Invalid permission level: {}. Use always, never, ask, or once.", level_str)),
+                    _ => {
+                        return Ok(format!(
+                            "Invalid permission level: {}. Use always, never, ask, or once.",
+                            level_str
+                        ))
+                    }
                 };
 
                 let mut perms = self.permissions.lock().unwrap();
                 perms.set_permission(tool.clone(), level.clone())?;
-                
+
                 return Ok(format!("✓ Set permission for '{}' to {:?}", tool, level));
             }
         }
-        
+
         // If no args or invalid args, show info
         Ok(self.permissions_info())
     }

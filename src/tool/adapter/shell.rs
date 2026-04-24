@@ -1,7 +1,9 @@
 //! Shell command execution tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool_handler::{BoxToolFuture, ToolHandler, ToolContext, ToolInvocation, ToolResult};
+use crate::tool::traits::tool_handler::{
+    BoxToolFuture, ToolContext, ToolHandler, ToolInvocation, ToolResult,
+};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Stdio;

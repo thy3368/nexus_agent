@@ -9,4 +9,3 @@ pub mod traits;
 
 pub mod adapter;
 // Re-export domain types for public API
-

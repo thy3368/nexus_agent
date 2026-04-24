@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::prompt::templates::TemplateManager;
+use crate::skill::model::SkillPromptContext;
 use crate::tool::tool_registry::ToolRegistry;
 
 use crate::tool::traits::context_provider::ContextProvider;
@@ -19,6 +20,16 @@ impl SystemPromptBuilder {
 
     /// Build complete system prompt with context
     pub async fn build(&self, config: &Config, tools: &ToolRegistry) -> Result<String> {
+        self.build_with_skills(config, tools, None).await
+    }
+
+    /// Build complete system prompt with optional skill context
+    pub async fn build_with_skills(
+        &self,
+        config: &Config,
+        tools: &ToolRegistry,
+        skill_context: Option<&SkillPromptContext>,
+    ) -> Result<String> {
         let tool_descriptions: Vec<String> = tools
             .definitions()
             .iter()
@@ -70,6 +81,27 @@ impl SystemPromptBuilder {
             .await
             .unwrap_or_else(|_| "Generic".to_string());
 
+        let mut skills_section = String::new();
+        if let Some(context) = skill_context {
+            if let Some(block) = &context.available_skills_block {
+                skills_section.push_str(block);
+                skills_section.push('\n');
+            }
+            for block in &context.explicit_skill_blocks {
+                skills_section.push_str(block);
+                skills_section.push('\n');
+            }
+            if !context.warnings.is_empty() {
+                skills_section.push_str("<skill_warnings>\n");
+                for warning in &context.warnings {
+                    skills_section.push_str("- ");
+                    skills_section.push_str(warning);
+                    skills_section.push('\n');
+                }
+                skills_section.push_str("</skill_warnings>\n\n");
+            }
+        }
+
         let mut final_prompt = String::new();
         if let Some(context) = project_context {
             final_prompt.push_str(&format!("Project Context:\n```\n{}\n```\n\n", context));
@@ -94,6 +126,7 @@ OUTPUT FORMAT:
 - Use emojis sparingly but effectively to convey status (e.g., 🔍 for search, 📝 for writing).
 - Keep responses clean and structured.
 
+{}
 AVAILABLE TOOLS:
 {}
 
@@ -109,6 +142,7 @@ Always explain your reasoning before taking an action."###,
             current_dir,
             project_type,
             git_info,
+            skills_section,
             tool_descriptions.join("\n")
         ));
 

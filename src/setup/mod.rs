@@ -1,4 +1,5 @@
 use crate::permissions::PermissionManager;
+use crate::skill::SkillManager;
 
 use crate::config::Config;
 use crate::llm::adapter::ollama::OllamaProvider;
@@ -92,4 +93,11 @@ pub fn create_tools() -> ToolRegistry {
 
 pub fn create_permission_manager() -> anyhow::Result<Arc<Mutex<PermissionManager>>> {
     Ok(Arc::new(Mutex::new(PermissionManager::new()?)))
+}
+
+pub fn create_skill_manager(config: &Config) -> anyhow::Result<Arc<SkillManager>> {
+    let manager = Arc::new(SkillManager::new());
+    let cwd = std::env::current_dir()?;
+    manager.load_for_config(config, &cwd)?;
+    Ok(manager)
 }

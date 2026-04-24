@@ -191,7 +191,10 @@ impl WeChatBot {
             MessageType::Text => {
                 if let Some(room_name) = &msg.room_name {
                     // 群消息
-                    info!("👥 群 [{}] - {}: {}", room_name, msg.talker_name, msg.content);
+                    info!(
+                        "👥 群 [{}] - {}: {}",
+                        room_name, msg.talker_name, msg.content
+                    );
                     self.handle_group_message(msg).await?;
                 } else {
                     // 私聊消息
@@ -220,13 +223,21 @@ impl WeChatBot {
             "帮助" | "help" | "菜单" => self.get_help_message(),
             "状态" | "status" => self.get_status_message(),
             "时间" | "time" => {
-                format!("当前时间: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"))
+                format!(
+                    "当前时间: {}",
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+                )
             }
             _ => {
                 // 检查关键词
                 for keyword in &self.config.keywords {
                     if msg.content.contains(keyword) {
-                        return Ok(self.send_reply(msg, &format!("您提到了「{}」，有什么可以帮您的吗？", keyword)).await?);
+                        return Ok(self
+                            .send_reply(
+                                msg,
+                                &format!("您提到了「{}」，有什么可以帮您的吗？", keyword),
+                            )
+                            .await?);
                     }
                 }
 
@@ -258,7 +269,10 @@ impl WeChatBot {
             let reply = match pure_text.to_lowercase().as_str() {
                 "帮助" | "help" => self.get_help_message(),
                 "状态" | "status" => self.get_status_message(),
-                _ => format!("👤 {} 你好！我收到了你的消息: {}", msg.talker_name, pure_text),
+                _ => format!(
+                    "👤 {} 你好！我收到了你的消息: {}",
+                    msg.talker_name, pure_text
+                ),
             };
 
             self.send_group_reply(msg, &reply).await?;
@@ -287,7 +301,11 @@ impl WeChatBot {
 
     /// 发送群聊回复 - 使用 wechaty-rust API
     async fn send_group_reply(&self, msg: &Message, content: &str) -> Result<()> {
-        info!("📤 回复群 [{}]: {}", msg.room_name.as_ref().unwrap_or(&"未知".to_string()), content);
+        info!(
+            "📤 回复群 [{}]: {}",
+            msg.room_name.as_ref().unwrap_or(&"未知".to_string()),
+            content
+        );
 
         // 实际使用 wechaty-rust 时的 API 调用:
         // use wechaty::prelude::*;
@@ -415,7 +433,12 @@ pub async fn run_wechat_bot(config: Option<WeChatConfig>) -> Result<()> {
                 break;
             }
             Err(e) if attempt < max_retries => {
-                error!("第 {} 次启动失败: {}，{}秒后重试...", attempt, e, attempt * 5);
+                error!(
+                    "第 {} 次启动失败: {}，{}秒后重试...",
+                    attempt,
+                    e,
+                    attempt * 5
+                );
                 tokio::time::sleep(tokio::time::Duration::from_secs((attempt * 5) as u64)).await;
             }
             Err(e) => {

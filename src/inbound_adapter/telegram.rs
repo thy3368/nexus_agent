@@ -44,7 +44,8 @@ async fn hello_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
 
 // 处理 /help 命令
 async fn help_handler(bot: Bot, msg: Message, _cmd: Command) -> ResponseResult<()> {
-    bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?;
+    bot.send_message(msg.chat.id, Command::descriptions().to_string())
+        .await?;
     Ok(())
 }
 
@@ -92,7 +93,11 @@ pub async fn run_telegram_bot() -> Result<(), Box<dyn std::error::Error>> {
     // 创建 Dispatcher
     let handler = dptree::entry()
         // 先处理命令
-        .branch(Update::filter_message().filter_command::<Command>().endpoint(command_handler))
+        .branch(
+            Update::filter_message()
+                .filter_command::<Command>()
+                .endpoint(command_handler),
+        )
         // 再处理普通消息
         .branch(Update::filter_message().endpoint(message_handler));
 

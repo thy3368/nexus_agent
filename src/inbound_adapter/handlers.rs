@@ -57,6 +57,7 @@ pub fn handle_doctor(config: &Config) -> anyhow::Result<()> {
     println!("  Default model: {}", config.models.default);
     println!("  Max iterations: {}", config.safety.max_iterations);
     println!("  Approval required: {}", config.safety.require_approval);
+    println!("  Skills enabled: {}", config.skills.enabled);
 
     println!("\n✓ All checks passed!");
 
@@ -69,9 +70,17 @@ pub async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
     let model = setup::create_model(&config)?;
     let tools = setup::create_tools();
     let permission_manager = setup::create_permission_manager()?;
+    let skill_manager = setup::create_skill_manager(&config)?;
 
-    let mut agent =
-        AgentReAct::new(model, tools, config, Vec::new(), permission_manager).await?;
+    let mut agent = AgentReAct::new_with_skills(
+        model,
+        tools,
+        config,
+        Vec::new(),
+        permission_manager,
+        Some(skill_manager),
+    )
+    .await?;
 
     println!("Task: {}\n", task);
     let result = agent.execute_task(task.to_string()).await?;

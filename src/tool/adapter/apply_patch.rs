@@ -1,7 +1,7 @@
 //! Apply patch tool
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolContext, ToolHandler, ToolResult};
 use async_trait::async_trait;
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};

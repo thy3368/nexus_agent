@@ -1,7 +1,7 @@
 //! MCP tool adapters
 
 use crate::error::Result;
-use crate::tool::traits::tool_handler::{ToolHandler, ToolContext, ToolResult};
+use crate::tool::traits::tool_handler::{ToolContext, ToolHandler, ToolResult};
 use async_trait::async_trait;
 
 /// Skeleton MCP tool caller.

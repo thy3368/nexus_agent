@@ -38,7 +38,7 @@ impl PermissionManager {
     /// Create a new permission manager
     pub fn new() -> Result<Self> {
         let storage_path = Self::get_storage_path()?;
-        
+
         // Load existing permissions if file exists
         let permissions = if storage_path.exists() {
             let content = std::fs::read_to_string(&storage_path)?;
@@ -56,12 +56,12 @@ impl PermissionManager {
 
     /// Get the storage path for permissions
     fn get_storage_path() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-        
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+
         let config_dir = home.join(".promptline");
         std::fs::create_dir_all(&config_dir)?;
-        
+
         Ok(config_dir.join("permissions.yaml"))
     }
 
@@ -170,15 +170,22 @@ mod tests {
     #[test]
     fn test_permission_levels() {
         let mut manager = PermissionManager::default();
-        
+
         // Reset permission to ensure clean state
-        manager.set_permission("test_tool".to_string(), PermissionLevel::Ask).unwrap();
-        
+        manager
+            .set_permission("test_tool".to_string(), PermissionLevel::Ask)
+            .unwrap();
+
         // Default should be Ask
         assert_eq!(manager.check_permission("test_tool"), PermissionLevel::Ask);
-        
+
         // Set to Always
-        manager.set_permission("test_tool".to_string(), PermissionLevel::Always).unwrap();
-        assert_eq!(manager.check_permission("test_tool"), PermissionLevel::Always);
+        manager
+            .set_permission("test_tool".to_string(), PermissionLevel::Always)
+            .unwrap();
+        assert_eq!(
+            manager.check_permission("test_tool"),
+            PermissionLevel::Always
+        );
     }
 }

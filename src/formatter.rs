@@ -28,7 +28,7 @@ impl ResponseFormatter {
     /// Format a tool result with structured output
     pub fn format_tool_result(&self, tool_name: &str, result: &str) -> String {
         let icon = self.tool_icons.get(tool_name).unwrap_or(&"⚙️");
-        
+
         match tool_name {
             "file_list" => self.format_file_list(result, icon),
             "file_read" => self.format_file_read(result, icon),
@@ -87,15 +87,18 @@ impl ResponseFormatter {
     /// Format a complete response with proper structure
     pub fn format_response(&self, content: &str) -> String {
         let cleaned = self.strip_model_identity(content);
-        
+
         // Remove FINISH keyword from end
         let cleaned = if cleaned.trim().ends_with("FINISH") {
-            let without_finish = cleaned.trim_end().strip_suffix("FINISH").unwrap_or(&cleaned);
+            let without_finish = cleaned
+                .trim_end()
+                .strip_suffix("FINISH")
+                .unwrap_or(&cleaned);
             without_finish.trim_end().to_string()
         } else {
             cleaned
         };
-        
+
         // Add proper spacing and structure
         cleaned
             .lines()
