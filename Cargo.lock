@@ -1638,6 +1638,7 @@ dependencies = [
  "assert_cmd",
  "async-openai",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "colored 2.2.0",
