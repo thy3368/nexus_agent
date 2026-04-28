@@ -1,5 +1,6 @@
 //! System prompt builder for constructing agent prompts
 
+use crate::agent::mode::AgentMode;
 use crate::config::Config;
 use crate::error::Result;
 use crate::prompt::templates::TemplateManager;
@@ -20,7 +21,18 @@ impl SystemPromptBuilder {
 
     /// Build complete system prompt with context
     pub async fn build(&self, config: &Config, tools: &ToolRegistry) -> Result<String> {
-        self.build_with_skills(config, tools, None).await
+        self.build_with_mode(config, tools, AgentMode::Execute)
+            .await
+    }
+
+    pub async fn build_with_mode(
+        &self,
+        config: &Config,
+        tools: &ToolRegistry,
+        mode: AgentMode,
+    ) -> Result<String> {
+        self.build_with_skills_and_mode(config, tools, None, mode)
+            .await
     }
 
     /// Build complete system prompt with optional skill context
@@ -30,16 +42,26 @@ impl SystemPromptBuilder {
         tools: &ToolRegistry,
         skill_context: Option<&SkillPromptContext>,
     ) -> Result<String> {
+        self.build_with_skills_and_mode(config, tools, skill_context, AgentMode::Execute)
+            .await
+    }
+
+    pub async fn build_with_skills_and_mode(
+        &self,
+        config: &Config,
+        tools: &ToolRegistry,
+        skill_context: Option<&SkillPromptContext>,
+        mode: AgentMode,
+    ) -> Result<String> {
         let tool_descriptions: Vec<String> = tools
-            .definitions()
-            .iter()
+            .definitions_with_metadata()
+            .into_iter()
+            .filter(|def| !mode.is_plan() || def.read_only)
             .map(|def| {
-                let params = serde_json::to_string_pretty(&def["parameters"]).unwrap_or_default();
+                let params = serde_json::to_string_pretty(&def.parameters).unwrap_or_default();
                 format!(
                     "- {}: {}\n  Parameters: {}",
-                    def["name"].as_str().unwrap_or("unknown"),
-                    def["description"].as_str().unwrap_or(""),
-                    params
+                    def.name, def.description, params
                 )
             })
             .collect();
@@ -102,6 +124,31 @@ impl SystemPromptBuilder {
             }
         }
 
+        let mode_instructions = match mode {
+            AgentMode::Execute => {
+                r#"PLAN TRACKING:
+- For multi-step work, use update_plan to maintain a concise checklist.
+- Keep at most one step in_progress at a time.
+- Mark completed steps as completed before finishing.
+- Do not use update_plan for trivial one-step tasks.
+"#
+            }
+            AgentMode::Plan => {
+                r#"PLAN MODE:
+- You are in read-only Plan Mode until this task completes.
+- User intent, tone, or imperative wording does not authorize implementation.
+- You may inspect the workspace with read-only tools only.
+- Do not modify files, apply patches, run mutating shell commands, commit, install dependencies, or alter configuration.
+- Do not call update_plan; it is a TODO/checklist tool for execution mode only.
+- Ask clarifying questions if requirements are ambiguous.
+- When ready, finalize with exactly one markdown implementation plan wrapped in:
+<proposed_plan>
+...
+</proposed_plan>
+"#
+            }
+        };
+
         let mut final_prompt = String::new();
         if let Some(context) = project_context {
             final_prompt.push_str(&format!("Project Context:\n```\n{}\n```\n\n", context));
@@ -127,6 +174,7 @@ OUTPUT FORMAT:
 - Keep responses clean and structured.
 
 {}
+{}
 AVAILABLE TOOLS:
 {}
 
@@ -143,6 +191,7 @@ Always explain your reasoning before taking an action."###,
             project_type,
             git_info,
             skills_section,
+            mode_instructions,
             tool_descriptions.join("\n")
         ));
 

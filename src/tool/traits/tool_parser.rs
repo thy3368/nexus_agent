@@ -1,5 +1,7 @@
 //! Tool call parser for extracting tool invocations from model responses
 
+use crate::agent::mode::AgentMode;
+use crate::agent::plan;
 use crate::tool::traits::tool_executor::ToolCall;
 use serde_json;
 
@@ -7,6 +9,8 @@ use serde_json;
 pub enum ParsedResponse {
     /// Model wants to call a tool
     ToolCall(ToolCall),
+    /// Model proposed a final implementation plan
+    ProposedPlan(String),
     /// Task is complete, model responded with FINISH
     Complete,
     /// Neither tool call nor FINISH - model gave free-form response
@@ -18,6 +22,10 @@ pub struct ModelResponseParser;
 impl ModelResponseParser {
     /// Parse model response into a unified enum
     pub fn parse(content: &str) -> ParsedResponse {
+        Self::parse_with_mode(content, AgentMode::Execute)
+    }
+
+    pub fn parse_with_mode(content: &str, mode: AgentMode) -> ParsedResponse {
         // Check for tool call first (takes priority)
         if let Some(start) = content.find('{') {
             if let Some(end) = content.rfind('}') {
@@ -33,6 +41,12 @@ impl ModelResponseParser {
                         });
                     }
                 }
+            }
+        }
+
+        if mode.is_plan() && plan::contains_complete_proposed_plan(content) {
+            if let Some(plan_text) = plan::extract_proposed_plan_text(content) {
+                return ParsedResponse::ProposedPlan(plan_text);
             }
         }
 
@@ -89,7 +103,17 @@ mod tests {
                 assert_eq!(call.name, "file_list");
             }
             ParsedResponse::Complete => panic!("Should be ToolCall, not Complete"),
+            ParsedResponse::ProposedPlan(_) => panic!("Should be ToolCall, not ProposedPlan"),
             ParsedResponse::Incomplete(_) => panic!("Should be ToolCall, not Incomplete"),
+        }
+    }
+
+    #[test]
+    fn test_parse_proposed_plan_in_plan_mode() {
+        let content = "Ready. <proposed_plan>\n- Step 1\n</proposed_plan>";
+        match ModelResponseParser::parse_with_mode(content, AgentMode::Plan) {
+            ParsedResponse::ProposedPlan(plan) => assert_eq!(plan, "- Step 1"),
+            _ => panic!("Expected ProposedPlan"),
         }
     }
 }

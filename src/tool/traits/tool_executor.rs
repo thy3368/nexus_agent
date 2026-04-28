@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::agent::mode::AgentMode;
 use crate::config::Config;
 use crate::error::Result;
 use crate::formatter::ResponseFormatter;
@@ -29,6 +30,7 @@ pub struct ToolExecutor {
     permission_manager: Arc<Mutex<PermissionManager>>,
     safety_validator: SafetyValidator,
     formatter: ResponseFormatter,
+    mode: AgentMode,
 }
 
 impl ToolExecutor {
@@ -37,11 +39,26 @@ impl ToolExecutor {
         permission_manager: Arc<Mutex<PermissionManager>>,
         safety_validator: SafetyValidator,
     ) -> Self {
+        Self::new_with_mode(
+            tools,
+            permission_manager,
+            safety_validator,
+            AgentMode::Execute,
+        )
+    }
+
+    pub fn new_with_mode(
+        tools: ToolRegistry,
+        permission_manager: Arc<Mutex<PermissionManager>>,
+        safety_validator: SafetyValidator,
+        mode: AgentMode,
+    ) -> Self {
         Self {
             tools,
             permission_manager,
             safety_validator,
             formatter: ResponseFormatter::new(),
+            mode,
         }
     }
 
@@ -82,6 +99,29 @@ impl ToolExecutor {
         config: &Config,
     ) -> Result<ToolExecutionResult> {
         let invocation = ToolInvocation::new(tool_call.name.clone(), tool_call.args.clone());
+
+        if self.mode.is_plan() && tool_call.name == "update_plan" {
+            return Ok(ToolExecutionResult {
+                success: false,
+                output: "update_plan is a TODO/checklist tool and is not allowed in Plan mode"
+                    .to_string(),
+                error: Some("Tool is not allowed in Plan mode".to_string()),
+            });
+        }
+
+        let is_mutating = self.tools.is_mutating(&invocation).await?;
+        tracing::debug!(tool = %tool_call.name, is_mutating, "tool mutability classified");
+
+        if self.mode.is_plan() && is_mutating {
+            return Ok(ToolExecutionResult {
+                success: false,
+                output: format!(
+                    "Tool '{}' is not allowed in Plan mode because it may modify state.",
+                    tool_call.name
+                ),
+                error: Some("Mutation blocked in Plan mode".to_string()),
+            });
+        }
 
         // Permission is checked before dispatch so potentially mutating tools cannot run
         // without explicit approval.
@@ -125,9 +165,6 @@ impl ToolExecutor {
         if let Some(branch) = ContextProvider::get_git_branch_sync() {
             ctx.git_branch = Some(branch);
         }
-
-        let is_mutating = self.tools.is_mutating(&invocation).await?;
-        tracing::debug!(tool = %tool_call.name, is_mutating, "tool mutability classified");
 
         let result = self.tools.dispatch(invocation, &ctx, config).await?;
 
