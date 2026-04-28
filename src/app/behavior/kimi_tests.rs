@@ -129,7 +129,7 @@ async fn test_agent_with_kimi_example() {
     .await
     .expect("Failed to create agent");
 
-    let task = "Use $simple-checklist to answer: 写个rust hello";
+    let task = "Use $simple-checklist to answer: 写个 Rust hello world 示例。不要创建文件或执行命令，只返回文本。";
 
     match agent.execute_task(task.to_string()).await {
         Ok(result) => {
@@ -143,6 +143,16 @@ async fn test_agent_with_kimi_example() {
             eprintln!("\n❌ Task failed: {}", e);
         }
     }
+
+    let system_prompt = agent
+        .get_conversation_history()
+        .iter()
+        .find(|message| message.role == "system")
+        .map(|message| message.content.as_str())
+        .expect("system prompt should be present");
+    assert!(system_prompt.contains("<skills_instructions>"));
+    assert!(system_prompt.contains("<skill name=\"simple-checklist\""));
+    assert!(system_prompt.contains("When this skill is active"));
 }
 
 /// Test: Multi-turn conversation with Kimi provider
