@@ -42,6 +42,12 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Agent { task }) => {
             handlers::handle_agent(&task, config).await?;
         }
+        Some(Commands::DesignPlan { task }) => {
+            handlers::handle_design_plan(&task, config).await?;
+        }
+        Some(Commands::ExecutePlan { task }) => {
+            handlers::handle_execute_plan(&task, config).await?;
+        }
         Some(Commands::Chat) => {
             handlers::handle_chat(config).await?;
         }

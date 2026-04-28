@@ -8,4 +8,6 @@
 pub mod traits;
 
 pub mod adapter;
+pub mod mode;
+pub mod plan;
 // Re-export domain types for public API

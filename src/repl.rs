@@ -46,6 +46,8 @@ impl CompleterTrait for ReplHelper {
             "/status",
             "/model",
             "/permissions",
+            "/skills",
+            "/plan",
             "/quit",
             "/exit",
             "/version",

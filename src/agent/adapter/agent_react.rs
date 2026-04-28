@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::agent::mode::AgentMode;
 use crate::agent::traits::agent_trait::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
@@ -27,6 +28,7 @@ pub struct AgentReAct {
     iteration_count: usize,
     conversation_history: Vec<AgentMessage>,
     skill_manager: Option<Arc<SkillManager>>,
+    mode: AgentMode,
 }
 
 impl AgentReAct {
@@ -49,6 +51,26 @@ impl AgentReAct {
         .await
     }
 
+    pub async fn new_with_mode(
+        model: Box<dyn LanguageModel>,
+        tools: ToolRegistry,
+        config: Config,
+        conversation_history: Vec<AgentMessage>,
+        permission_manager: Arc<Mutex<PermissionManager>>,
+        mode: AgentMode,
+    ) -> Result<Self> {
+        Self::new_with_skills_and_mode(
+            model,
+            tools,
+            config,
+            conversation_history,
+            permission_manager,
+            None,
+            mode,
+        )
+        .await
+    }
+
     /// Create a new agent with optional skill support
     pub async fn new_with_skills(
         model: Box<dyn LanguageModel>,
@@ -58,10 +80,32 @@ impl AgentReAct {
         permission_manager: Arc<Mutex<PermissionManager>>,
         skill_manager: Option<Arc<SkillManager>>,
     ) -> Result<Self> {
+        Self::new_with_skills_and_mode(
+            model,
+            tools,
+            config,
+            conversation_history,
+            permission_manager,
+            skill_manager,
+            AgentMode::Execute,
+        )
+        .await
+    }
+
+    pub async fn new_with_skills_and_mode(
+        model: Box<dyn LanguageModel>,
+        tools: ToolRegistry,
+        config: Config,
+        conversation_history: Vec<AgentMessage>,
+        permission_manager: Arc<Mutex<PermissionManager>>,
+        skill_manager: Option<Arc<SkillManager>>,
+        mode: AgentMode,
+    ) -> Result<Self> {
         let safety_validator = crate::safety::SafetyValidator::new(config.clone())?;
         let prompt_builder = SystemPromptBuilder::new().await?;
         let formatter = ResponseFormatter::new();
-        let tool_executor = ToolExecutor::new(tools, permission_manager, safety_validator);
+        let tool_executor =
+            ToolExecutor::new_with_mode(tools, permission_manager, safety_validator, mode);
 
         Ok(Self {
             model,
@@ -72,6 +116,7 @@ impl AgentReAct {
             iteration_count: 0,
             conversation_history,
             skill_manager,
+            mode,
         })
     }
 
@@ -83,10 +128,11 @@ impl AgentReAct {
             .map(|manager| manager.render_prompt_context(&self.config, task));
         let system_prompt = self
             .prompt_builder
-            .build_with_skills(
+            .build_with_skills_and_mode(
                 &self.config,
                 &self.tool_executor.tools,
                 skill_context.as_ref(),
+                self.mode,
             )
             .await?;
         self.conversation_history
@@ -136,7 +182,7 @@ impl Agent for AgentReAct {
 
             let response = self.call_model().await?;
 
-            match ModelResponseParser::parse(&response.content) {
+            match ModelResponseParser::parse_with_mode(&response.content, self.mode) {
                 ParsedResponse::ToolCall(tool_call) => {
                     let result = self
                         .tool_executor
@@ -163,6 +209,16 @@ impl Agent for AgentReAct {
                     self.conversation_history
                         .push(AgentMessage::user(observation));
                 }
+                ParsedResponse::ProposedPlan(plan_text) => {
+                    tracing::info!(
+                        iterations = self.iteration_count,
+                        tools_used = tool_calls.len(),
+                        "Plan proposed successfully"
+                    );
+                    self.conversation_history
+                        .push(AgentMessage::assistant(response.content.clone()));
+                    return Ok(self.create_result(true, plan_text, tool_calls));
+                }
                 ParsedResponse::Complete => {
                     tracing::info!(
                         iterations = self.iteration_count,
@@ -179,10 +235,17 @@ impl Agent for AgentReAct {
                         response_preview = %preview,
                         "Incomplete response - requesting tool call or FINISH"
                     );
-                    let prompt = format!(
-                        "You said: \"{}\"\n\nPlease either:\n1. Use a tool to complete the task, OR\n2. Say FINISH if the task is done.",
-                        response.content.chars().take(200).collect::<String>()
-                    );
+                    let prompt = if self.mode.is_plan() {
+                        format!(
+                            "You said: \"{}\"\n\nPlease either use a read-only tool to continue planning, or finalize with a complete <proposed_plan>...</proposed_plan> block.",
+                            response.content.chars().take(200).collect::<String>()
+                        )
+                    } else {
+                        format!(
+                            "You said: \"{}\"\n\nPlease either:\n1. Use a tool to complete the task, OR\n2. Say FINISH if the task is done.",
+                            response.content.chars().take(200).collect::<String>()
+                        )
+                    };
                     self.conversation_history.push(AgentMessage::user(prompt));
                 }
             }

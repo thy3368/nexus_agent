@@ -43,6 +43,20 @@ pub enum Commands {
         task: String,
     },
 
+    /// Design an implementation plan without mutating files
+    #[command(name = "design-plan", alias = "plan")]
+    DesignPlan {
+        /// Task to plan
+        task: String,
+    },
+
+    /// Execute an implementation plan
+    #[command(name = "execute-plan")]
+    ExecutePlan {
+        /// Plan or task to execute
+        task: String,
+    },
+
     /// Start interactive chat mode
     Chat,
 
@@ -65,5 +79,37 @@ pub enum Commands {
 impl Cli {
     pub fn parse_args() -> Self {
         Self::parse()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_design_plan_command() {
+        let cli = Cli::try_parse_from(["promptline", "design-plan", "add auth"]).unwrap();
+        match cli.command {
+            Some(Commands::DesignPlan { task }) => assert_eq!(task, "add auth"),
+            _ => panic!("expected design-plan command"),
+        }
+    }
+
+    #[test]
+    fn parses_plan_alias() {
+        let cli = Cli::try_parse_from(["promptline", "plan", "add auth"]).unwrap();
+        match cli.command {
+            Some(Commands::DesignPlan { task }) => assert_eq!(task, "add auth"),
+            _ => panic!("expected plan alias"),
+        }
+    }
+
+    #[test]
+    fn parses_execute_plan_command() {
+        let cli = Cli::try_parse_from(["promptline", "execute-plan", "implement plan"]).unwrap();
+        match cli.command {
+            Some(Commands::ExecutePlan { task }) => assert_eq!(task, "implement plan"),
+            _ => panic!("expected execute-plan command"),
+        }
     }
 }

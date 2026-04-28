@@ -6,8 +6,8 @@ use crate::llm::adapter::ollama::OllamaProvider;
 use crate::llm::adapter::openai::OpenAIProvider;
 use crate::llm::traits::language_model::LanguageModel;
 use crate::tool::adapter::{
-    apply_patch, file_ops, git_ops, image_ops, mcp, search_ops, shell, tool_search, unified_exec,
-    web_ops,
+    apply_patch, file_ops, git_ops, image_ops, mcp, plan, search_ops, shell, tool_search,
+    unified_exec, web_ops,
 };
 use crate::tool::tool_registry::ToolRegistry;
 use std::sync::{Arc, Mutex};
@@ -75,6 +75,7 @@ pub fn create_tools() -> ToolRegistry {
     tools.register(mcp::McpResourceTool::new());
     tools.register(unified_exec::ExecCommandTool::new());
     tools.register(unified_exec::WriteStdinTool::new());
+    tools.register(plan::UpdatePlanTool::new());
     tools.register(tool_search::ToolSearchTool::new(
         tools
             .definitions_with_metadata()

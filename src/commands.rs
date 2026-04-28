@@ -22,6 +22,7 @@ pub enum CommandAction {
     ClearHistory,
     ReloadAgent,
     ReloadSkills,
+    DesignPlan(String),
 }
 
 impl CommandOutput {
@@ -48,6 +49,7 @@ pub enum SlashCommand {
     Model(Option<Vec<String>>),       // Optional args
     Permissions(Option<Vec<String>>), // Optional args
     Skills(Option<Vec<String>>),
+    Plan(Option<Vec<String>>),
     Quit,
     Version,
 }
@@ -108,6 +110,7 @@ impl CommandHandler {
             "/model" => Some(SlashCommand::Model(args)),
             "/permissions" | "/perms" => Some(SlashCommand::Permissions(args)),
             "/skills" | "/skill" => Some(SlashCommand::Skills(args)),
+            "/plan" => Some(SlashCommand::Plan(args)),
             "/quit" | "/exit" | "/q" => Some(SlashCommand::Quit),
             "/version" | "/v" => Some(SlashCommand::Version),
             _ => None,
@@ -128,6 +131,7 @@ impl CommandHandler {
                 Ok(CommandOutput::new(self.handle_permissions(args)?))
             }
             SlashCommand::Skills(args) => self.handle_skills(args),
+            SlashCommand::Plan(args) => self.handle_plan(args),
             SlashCommand::Quit => {
                 Ok(CommandOutput::new("Goodbye! 👋").with_action(CommandAction::Quit))
             }
@@ -151,6 +155,7 @@ Available slash commands:
   /model        Show model information
   /permissions  Manage tool permissions
   /skills       List and reload available skills
+  /plan <task>  Design a read-only implementation plan
   /quit         Exit PromptLine
   /version      Show version info
 
@@ -337,6 +342,22 @@ Aliases:
         )
     }
 
+    fn handle_plan(&self, args: Option<Vec<String>>) -> Result<CommandOutput> {
+        let Some(args) = args else {
+            return Ok(CommandOutput::new("Usage: /plan <task>"));
+        };
+
+        if args.is_empty() {
+            return Ok(CommandOutput::new("Usage: /plan <task>"));
+        }
+
+        let task = args.join(" ");
+        Ok(
+            CommandOutput::new(format!("Designing a read-only plan for: {}", task))
+                .with_action(CommandAction::DesignPlan(task)),
+        )
+    }
+
     fn handle_skills(&self, args: Option<Vec<String>>) -> Result<CommandOutput> {
         let Some(manager) = &self.skill_manager else {
             return Ok(CommandOutput::new(
@@ -466,6 +487,37 @@ mod tests {
         assert_eq!(CommandHandler::parse("/help"), Some(SlashCommand::Help));
         assert_eq!(CommandHandler::parse("/quit"), Some(SlashCommand::Quit));
         assert_eq!(CommandHandler::parse("/h"), Some(SlashCommand::Help));
+        assert_eq!(
+            CommandHandler::parse("/plan add auth"),
+            Some(SlashCommand::Plan(Some(vec![
+                "add".to_string(),
+                "auth".to_string()
+            ])))
+        );
         assert_eq!(CommandHandler::parse("not a command"), None);
+    }
+
+    #[test]
+    fn test_plan_command_action() {
+        let permissions = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        let mut handler = CommandHandler::new(Config::default(), permissions);
+        let output = handler
+            .execute(SlashCommand::Plan(Some(vec![
+                "add".to_string(),
+                "auth".to_string(),
+            ])))
+            .unwrap();
+
+        assert_eq!(
+            output.action,
+            CommandAction::DesignPlan("add auth".to_string())
+        );
+    }
+
+    #[test]
+    fn help_mentions_plan_command() {
+        let permissions = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        let handler = CommandHandler::new(Config::default(), permissions);
+        assert!(handler.help().contains("/plan <task>"));
     }
 }

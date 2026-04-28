@@ -1,5 +1,6 @@
 use super::repl_session::ReplSession;
 use crate::agent::adapter::agent_react::AgentReAct;
+use crate::agent::mode::AgentMode;
 use crate::app::behavior::Agent;
 use crate::config::Config;
 use crate::setup;
@@ -65,20 +66,38 @@ pub fn handle_doctor(config: &Config) -> anyhow::Result<()> {
 }
 
 pub async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
-    println!("⚙️  Agent mode\n");
+    run_agent_task("⚙️  Agent mode", task, config, AgentMode::Execute).await
+}
+
+pub async fn handle_design_plan(task: &str, config: Config) -> anyhow::Result<()> {
+    run_agent_task("🧭 Design plan mode", task, config, AgentMode::Plan).await
+}
+
+pub async fn handle_execute_plan(task: &str, config: Config) -> anyhow::Result<()> {
+    run_agent_task("⚙️  Execute plan mode", task, config, AgentMode::Execute).await
+}
+
+async fn run_agent_task(
+    heading: &str,
+    task: &str,
+    config: Config,
+    mode: AgentMode,
+) -> anyhow::Result<()> {
+    println!("{}\n", heading);
 
     let model = setup::create_model(&config)?;
     let tools = setup::create_tools();
     let permission_manager = setup::create_permission_manager()?;
     let skill_manager = setup::create_skill_manager(&config)?;
 
-    let mut agent = AgentReAct::new_with_skills(
+    let mut agent = AgentReAct::new_with_skills_and_mode(
         model,
         tools,
         config,
         Vec::new(),
         permission_manager,
         Some(skill_manager),
+        mode,
     )
     .await?;
 

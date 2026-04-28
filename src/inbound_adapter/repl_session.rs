@@ -3,6 +3,7 @@
 use std::io::{self, Write};
 
 use crate::agent::adapter::agent_react::AgentReAct;
+use crate::agent::mode::AgentMode;
 use crate::app::behavior::Agent;
 use crate::commands::CommandHandler;
 use crate::config::Config;
@@ -47,6 +48,35 @@ impl ReplSession {
             config,
             skill_manager,
         })
+    }
+
+    async fn run_design_plan(&self, task: String) -> anyhow::Result<()> {
+        let model = setup::create_model(&self.config)?;
+        let tools = setup::create_tools();
+        let permission_manager = setup::create_permission_manager()?;
+        let mut agent = AgentReAct::new_with_skills_and_mode(
+            model,
+            tools,
+            self.config.clone(),
+            Vec::new(),
+            permission_manager,
+            Some(self.skill_manager.clone()),
+            AgentMode::Plan,
+        )
+        .await?;
+
+        match agent.execute_task(task).await {
+            Ok(result) => {
+                if !result.output.is_empty() {
+                    println!("{}\n", agent.format_response(&result.output));
+                }
+            }
+            Err(e) => {
+                eprintln!("\n\x1b[1;31mError:\x1b[0m {}\n", e);
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
@@ -107,6 +137,9 @@ impl ReplSession {
                                             outcome.skills.len(),
                                             outcome.errors.len()
                                         );
+                                    }
+                                    crate::commands::CommandAction::DesignPlan(task) => {
+                                        self.run_design_plan(task).await?;
                                     }
                                     crate::commands::CommandAction::None => {}
                                 }
