@@ -34,6 +34,7 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
+    use crate::context::agent_context::AgentContext;
     use crate::llm::traits::ll_model::{
         LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
     };
@@ -93,8 +94,9 @@ mod tests {
         config.safety.require_approval = false;
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        let context = AgentContext::new(Vec::<LLMRequest>::new()).await.unwrap();
 
-        let agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
+        let agent = AgentReAct::new(model, tools, config, context, permission_manager)
             .await
             .unwrap();
 
@@ -128,8 +130,9 @@ mod tests {
         config.safety.require_approval = false;
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
+        let context = AgentContext::new(Vec::<LLMRequest>::new()).await.unwrap();
 
-        let agent = AgentReAct::new(model, tools, config, Vec::new(), permission_manager)
+        let agent = AgentReAct::new(model, tools, config, context, permission_manager)
             .await
             .unwrap();
 
