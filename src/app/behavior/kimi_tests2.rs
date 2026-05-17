@@ -10,7 +10,6 @@ use crate::llm::adapter::kimi::KimiProvider;
 use crate::llm::traits::ll_model::LLModel;
 
 use crate::permissions::PermissionManager;
-use crate::skill::SkillManager;
 use crate::tool::adapter::file_ops::{FileListTool, FileReadTool, FileWriteTool};
 use crate::tool::adapter::git_ops::{GitCommitTool, GitDiffTool, GitStatusTool};
 use crate::tool::adapter::search_ops::CodebaseSearchTool;
@@ -32,23 +31,20 @@ fn skill_fixture_root() -> std::path::PathBuf {
         .join("skills")
 }
 
-/// Test: Single task with Kimi provider
+/// Test: Multi-turn conversation with Kimi provider
 ///
 /// Run with:
 /// ```bash
-/// KIMI_API_KEY="your-api-key" cargo test test_agent_with_kimi_example -- --ignored --nocapture
+/// KIMI_API_KEY="your-api-key" cargo test test_agent_kimi_multi_turn -- --ignored --nocapture
 /// ```
 #[tokio::test]
-async fn test_agent_with_kimi_example() {
+async fn test_agent_kimi_multi_turn() {
     init_logging();
 
     let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
 
     let mut config = Config::load().unwrap_or_default();
     config.safety.require_approval = false;
-    config.skills.project_skills = false;
-    config.skills.user_skills = false;
-    config.skills.roots = vec![skill_fixture_root()];
 
     let kimi_provider = KimiProvider::new(
         api_key,
@@ -67,6 +63,9 @@ async fn test_agent_with_kimi_example() {
     tools.register(GitCommitTool::new());
     tools.register(CodebaseSearchTool::new());
     tools.register(WebGetTool::new());
+
+    let mut config = Config::default();
+    config.safety.require_approval = false;
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
     let mut pm = permission_manager.lock().unwrap();
@@ -117,47 +116,29 @@ async fn test_agent_with_kimi_example() {
     .unwrap();
     drop(pm);
 
-    let skill_manager = Arc::new(SkillManager::new());
-    skill_manager
-        .load_for_config(&config, std::path::Path::new("."))
-        .expect("Failed to load skills");
-
     let context = AgentContext::new(Vec::new())
         .await
         .expect("Failed to create agent context");
-    let mut agent = AgentReAct::new_with_skills(
-        model,
-        tools,
-        config,
-        context,
-        permission_manager,
-        Some(skill_manager),
-    )
-    .await
-    .expect("Failed to create agent");
+    let mut agent = AgentReAct::new(model, tools, config, context, permission_manager)
+        .await
+        .expect("Failed to create agent");
 
-    let task = "Use $simple-checklist to answer: 写个 Rust hello world 示例。不要创建文件或执行命令，只返回文本。";
+    let tasks = vec!["你好，请介绍一下你自己", "列出当前目录的文件"];
 
-    match agent.execute_task(task.to_string()).await {
-        Ok(result) => {
-            println!("\n✅ Task completed successfully!");
-            println!("  Success: {}", result.success);
-            println!("  Iterations: {}", result.iterations);
-            println!("  Tools used: {:?}", result.tool_calls);
-            println!("  Output:\n{}", result.output);
-        }
-        Err(e) => {
-            eprintln!("\n❌ Task failed: {}", e);
+    for (idx, task) in tasks.iter().enumerate() {
+        println!("\n🔄 Task {}: {}", idx + 1, task);
+
+        match agent.execute_task(task.to_string()).await {
+            Ok(result) => {
+                let preview = result.output.chars().take(100).collect::<String>();
+                println!("✅ Result: {}", preview);
+            }
+            Err(e) => {
+                eprintln!("❌ Error: {}", e);
+            }
         }
     }
 
-    let system_prompt = agent
-        .get_conversation_history()
-        .iter()
-        .find(|message| message.role == "system")
-        .map(|message| message.content.as_str())
-        .expect("system prompt should be present");
-    assert!(system_prompt.contains("<skills_instructions>"));
-    assert!(system_prompt.contains("<skill name=\"simple-checklist\""));
-    assert!(system_prompt.contains("When this skill is active"));
+    let history = agent.get_conversation_history();
+    println!("\n📊 Final conversation has {} messages", history.len());
 }

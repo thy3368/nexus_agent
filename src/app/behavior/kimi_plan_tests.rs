@@ -6,6 +6,7 @@ use crate::agent::adapter::agent_react::AgentReAct;
 use crate::agent::mode::AgentMode;
 use crate::agent::traits::Agent;
 use crate::config::Config;
+use crate::context::agent_context::AgentContext;
 use crate::llm::adapter::kimi::KimiProvider;
 use crate::llm::traits::ll_model::LLModel;
 use crate::permissions::{PermissionLevel, PermissionManager};
@@ -83,11 +84,14 @@ async fn test_agent_kimi_plan_mode_proposes_plan_without_mutation() {
         ],
     );
 
+    let context = AgentContext::new(Vec::new())
+        .await
+        .expect("Failed to create agent context");
     let mut agent = AgentReAct::new_with_mode(
         model,
         tools,
         config,
-        Vec::new(),
+        context,
         permission_manager,
         AgentMode::Plan,
     )
