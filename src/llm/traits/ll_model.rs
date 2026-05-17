@@ -90,17 +90,12 @@ fn sanitize_log_segment(value: &str) -> String {
     }
 }
 
-fn build_log_file_prefix(info: &LLMInfo) -> String {
+fn build_log_file_prefix(info: &LLMInfo, session_id: &str) -> String {
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
     let provider = sanitize_log_segment(&info.provider);
     let model = sanitize_log_segment(&info.model);
-    let suffix: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(6)
-        .map(char::from)
-        .collect();
 
-    format!("{}-{}-{}-{}", timestamp, provider, model, suffix)
+    format!("{}-{}-{}-{}", provider, model, session_id, timestamp)
 }
 
 fn log_file_path(dir: &Path, prefix: &str, kind: &str) -> PathBuf {
@@ -121,11 +116,7 @@ async fn write_llm_log(path: PathBuf, payload: serde_json::Value) -> crate::Resu
 #[async_trait]
 pub trait LLModel: Send + Sync {
     /// Generate a completion for a prompt
-    async fn complete(
-        &self,
-        prompt: &str,
-        system_prompt: Option<&str>,
-    ) -> crate::Result<LLMReply>;
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> crate::Result<LLMReply>;
 
     /// Generate a chat completion
     async fn do_chat(
@@ -142,9 +133,9 @@ pub trait LLModel: Send + Sync {
         &self,
         messages: &[LLMRequest],
         tools: Option<&[ToolDefinition]>,
-        session_id: Option<&str>,
+        session_id: &str,
     ) -> crate::Result<LLMReply> {
-        let sid = session_id.unwrap_or("N/A");
+        let sid = session_id;
         tracing::debug!(
             "\n[LLM CHAT] [{}] === Input Messages (count: {}) ===",
             sid,
@@ -153,16 +144,28 @@ pub trait LLModel: Send + Sync {
 
         for (i, msg) in messages.iter().enumerate() {
             tracing::debug!("[LLM CHAT] [{}] Message[{}] role={}", sid, i, msg.role);
-            tracing::debug!("[LLM CHAT] [{}] Message[{}] content:\n{}", sid, i, msg.content);
+            tracing::debug!(
+                "[LLM CHAT] [{}] Message[{}] content:\n{}",
+                sid,
+                i,
+                msg.content
+            );
         }
         if let Some(tools) = tools {
             let tool_names: Vec<_> = tools.iter().map(|tool| tool.name.as_str()).collect();
-            tracing::debug!("[LLM CHAT] [{}] tools (count={}): {:?}", sid, tools.len(), tool_names);
+            tracing::debug!(
+                "[LLM CHAT] [{}] tools (count={}): {:?}",
+                sid,
+                tools.len(),
+                tool_names
+            );
         }
         tracing::debug!("[LLM CHAT] [{}] === End Input ===\n", sid);
 
         let model_info = self.model_info();
-        let log_prefix = self.llm_log_dir().map(|_| build_log_file_prefix(&model_info));
+        let log_prefix = self
+            .llm_log_dir()
+            .map(|_| build_log_file_prefix(&model_info, session_id));
 
         if let (Some(log_dir), Some(prefix)) = (self.llm_log_dir(), log_prefix.as_deref()) {
             let request_path = log_file_path(log_dir, prefix, "request");
@@ -185,7 +188,11 @@ pub trait LLModel: Send + Sync {
 
         match &result {
             Ok(reply) => {
-                tracing::debug!("\n[LLM CHAT] [{}] === Output (model: {}) ===", sid, reply.model);
+                tracing::debug!(
+                    "\n[LLM CHAT] [{}] === Output (model: {}) ===",
+                    sid,
+                    reply.model
+                );
                 tracing::debug!(
                     "[LLM CHAT] [{}] content (len={}):\n---START---\n{}\n---END---",
                     sid,

@@ -109,7 +109,7 @@ impl Agent for AgentReAct {
                 return Err(AgentError::MaxIterationsExceeded.into());
             }
 
-            let response = self.model.chat(self.context.history(), None, Some(&session_id)).await?;
+            let response = self.model.chat(self.context.history(), None, &session_id).await?;
 
             match ModelResponseParser::parse_with_mode(&response.content, self.mode) {
                 ParsedResponse::ToolCall(tool_call) => {
