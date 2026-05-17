@@ -1,8 +1,8 @@
 //! Google Gemini API provider implementation
 
 use crate::error::{ModelError, Result};
-use crate::llm::traits::language_model::{
-    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+use crate::llm::traits::ll_model::{
+    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ impl GeminiProvider {
         self
     }
 
-    fn convert_messages(&self, messages: &[AgentMessage]) -> Vec<serde_json::Value> {
+    fn convert_messages(&self, messages: &[LLMRequest]) -> Vec<serde_json::Value> {
         let mut parts = Vec::new();
 
         for msg in messages {
@@ -56,20 +56,20 @@ impl GeminiProvider {
 }
 
 #[async_trait]
-impl LanguageModel for GeminiProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
+impl LLModel for GeminiProvider {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
-            messages.push(AgentMessage::system(sys));
+            messages.push(LLMRequest::system(sys));
         }
 
-        messages.push(AgentMessage::user(prompt));
+        messages.push(LLMRequest::user(prompt));
 
         self.do_chat(&messages).await
     }
 
-    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -124,7 +124,7 @@ impl LanguageModel for GeminiProvider {
             TokenUsage::default()
         };
 
-        Ok(ModelReply {
+        Ok(LLMReply {
             content,
             model: self.model.clone(),
             usage,
@@ -137,16 +137,16 @@ impl LanguageModel for GeminiProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelReply> {
+    ) -> Result<LLMReply> {
         // For MVP, use regular chat
         // Gemini supports function calling but we'll implement it in Phase 2
         self.do_chat(messages).await
     }
 
-    fn model_info(&self) -> LlmInfo {
-        LlmInfo {
+    fn model_info(&self) -> LLmInfo {
+        LLmInfo {
             provider: "gemini".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
@@ -182,9 +182,9 @@ mod tests {
         let provider = GeminiProvider::new("test-key".to_string(), None);
 
         let messages = vec![
-            AgentMessage::system("You are helpful"),
-            AgentMessage::user("Hello"),
-            AgentMessage::assistant("Hi there"),
+            LLMRequest::system("You are helpful"),
+            LLMRequest::user("Hello"),
+            LLMRequest::assistant("Hi there"),
         ];
 
         let converted = provider.convert_messages(&messages);

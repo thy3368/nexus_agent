@@ -1,8 +1,8 @@
 //! OpenAI API provider implementation
 
 use crate::error::{ModelError, Result};
-use crate::llm::traits::language_model::{
-    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+use crate::llm::traits::ll_model::{
+    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
@@ -35,7 +35,7 @@ impl OpenAIProvider {
 
     fn convert_message(
         &self,
-        msg: &AgentMessage,
+        msg: &LLMRequest,
     ) -> async_openai::types::ChatCompletionRequestMessage {
         use async_openai::types::*;
 
@@ -70,20 +70,20 @@ impl OpenAIProvider {
 }
 
 #[async_trait]
-impl LanguageModel for OpenAIProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
+impl LLModel for OpenAIProvider {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
-            messages.push(AgentMessage::system(sys));
+            messages.push(LLMRequest::system(sys));
         }
 
-        messages.push(AgentMessage::user(prompt));
+        messages.push(LLMRequest::user(prompt));
 
         self.do_chat(&messages).await
     }
 
-    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
         use async_openai::types::*;
 
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
@@ -120,7 +120,7 @@ impl LanguageModel for OpenAIProvider {
             TokenUsage::default()
         };
 
-        Ok(ModelReply {
+        Ok(LLMReply {
             content,
             model: response.model,
             usage,
@@ -131,16 +131,16 @@ impl LanguageModel for OpenAIProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelReply> {
+    ) -> Result<LLMReply> {
         // For MVP, we'll use regular chat
         // Phase 2 will add proper function calling support
         self.do_chat(messages).await
     }
 
-    fn model_info(&self) -> LlmInfo {
-        LlmInfo {
+    fn model_info(&self) -> LLmInfo {
+        LLmInfo {
             provider: "openai".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
@@ -176,7 +176,7 @@ mod tests {
     fn test_message_conversion() {
         let provider = OpenAIProvider::new("test-key".to_string(), None);
 
-        let msg = AgentMessage::user("Hello");
+        let msg = LLMRequest::user("Hello");
         let _converted = provider.convert_message(&msg);
 
         // Just testing that conversion doesn't panic

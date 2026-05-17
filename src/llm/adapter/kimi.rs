@@ -1,6 +1,6 @@
 use crate::error::{ModelError, Result};
-use crate::llm::traits::language_model::{
-    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage, ToolCall,
+use crate::llm::traits::ll_model::{
+    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage, ToolCall,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
@@ -35,9 +35,9 @@ impl KimiProvider {
 
     async fn do_chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         tools: Option<Vec<KimiTool>>,
-    ) -> Result<ModelReply> {
+    ) -> Result<LLMReply> {
         let url = "https://api.moonshot.cn/v1/chat/completions";
 
         let kimi_messages: Vec<KimiMessage> = messages
@@ -95,7 +95,7 @@ impl KimiProvider {
                 .collect()
         });
 
-        Ok(ModelReply {
+        Ok(LLMReply {
             content: choice.message.content.clone().unwrap_or_default(),
             model: kimi_resp.model,
             usage: TokenUsage {
@@ -181,25 +181,25 @@ struct KimiUsage {
 }
 
 #[async_trait]
-impl LanguageModel for KimiProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
+impl LLModel for KimiProvider {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(AgentMessage::system(sys));
+            messages.push(LLMRequest::system(sys));
         }
-        messages.push(AgentMessage::user(prompt));
+        messages.push(LLMRequest::user(prompt));
         self.do_chat(&messages).await
     }
 
-    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
         self.do_chat_with_tools(messages, None).await
     }
 
     async fn chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         tools: &[ToolDefinition],
-    ) -> Result<ModelReply> {
+    ) -> Result<LLMReply> {
         let kimi_tools: Vec<KimiTool> = tools
             .iter()
             .map(|tool| KimiTool {
@@ -215,8 +215,8 @@ impl LanguageModel for KimiProvider {
         self.do_chat_with_tools(messages, Some(kimi_tools)).await
     }
 
-    fn model_info(&self) -> LlmInfo {
-        LlmInfo {
+    fn model_info(&self) -> LLmInfo {
+        LLmInfo {
             provider: "kimi".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
@@ -260,9 +260,9 @@ mod tests {
     #[tokio::test]
     async fn test_kimi_message_conversion() {
         let messages = vec![
-            AgentMessage::system("You are a helpful assistant"),
-            AgentMessage::user("Hello"),
-            AgentMessage::assistant("Hi there!"),
+            LLMRequest::system("You are a helpful assistant"),
+            LLMRequest::user("Hello"),
+            LLMRequest::assistant("Hi there!"),
         ];
 
         let kimi_messages: Vec<KimiMessage> = messages
@@ -288,7 +288,7 @@ mod tests {
 
         let provider = KimiProvider::new(api_key, Some("moonshot-v1".to_string()));
 
-        let messages = vec![AgentMessage::user("你好，请用一句话介绍你自己")];
+        let messages = vec![LLMRequest::user("你好，请用一句话介绍你自己")];
 
         let response = provider.do_chat(&messages).await;
 

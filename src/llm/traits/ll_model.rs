@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Model information
 #[derive(Debug, Clone)]
-pub struct LlmInfo {
+pub struct LLmInfo {
     pub provider: String,
     pub model: String,
     pub max_tokens: usize,
@@ -15,12 +15,12 @@ pub struct LlmInfo {
 
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentMessage {
+pub struct LLMRequest {
     pub role: String,
     pub content: String,
 }
 
-impl AgentMessage {
+impl LLMRequest {
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: "system".to_string(),
@@ -61,7 +61,7 @@ pub struct ToolCall {
 
 /// Model response
 #[derive(Debug, Clone)]
-pub struct ModelReply {
+pub struct LLMReply {
     pub content: String,
     pub model: String,
     pub usage: TokenUsage,
@@ -71,18 +71,18 @@ pub struct ModelReply {
 
 /// Language model provider trait
 #[async_trait]
-pub trait LanguageModel: Send + Sync {
+pub trait LLModel: Send + Sync {
     /// Generate a completion for a prompt
     async fn complete(
         &self,
         prompt: &str,
         system_prompt: Option<&str>,
-    ) -> crate::Result<ModelReply>;
+    ) -> crate::Result<LLMReply>;
 
     /// Generate a chat completion
-    async fn do_chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply>;
+    async fn do_chat(&self, messages: &[LLMRequest]) -> crate::Result<LLMReply>;
 
-    async fn chat(&self, messages: &[AgentMessage]) -> crate::Result<ModelReply> {
+    async fn chat(&self, messages: &[LLMRequest]) -> crate::Result<LLMReply> {
         tracing::debug!(
             "\n[LLM CHAT] === Input Messages (count: {}) ===",
             messages.len()
@@ -92,6 +92,8 @@ pub trait LanguageModel: Send + Sync {
             tracing::debug!("[LLM CHAT] Message[{}] content:\n{}", i, msg.content);
         }
         tracing::debug!("[LLM CHAT] === End Input ===\n");
+
+        //todo 我想把 每一次  request/reply 打印到一个单独的log文件中
 
         let result = self.do_chat(messages).await;
 
@@ -118,12 +120,12 @@ pub trait LanguageModel: Send + Sync {
     /// Generate a chat completion with tool support
     async fn chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         tools: &[ToolDefinition],
-    ) -> crate::Result<ModelReply>;
+    ) -> crate::Result<LLMReply>;
 
     /// Get model information
-    fn model_info(&self) -> LlmInfo;
+    fn model_info(&self) -> LLmInfo;
 
     /// Estimate token count for text
     fn estimate_tokens(&self, text: &str) -> usize {
@@ -148,11 +150,11 @@ mod tests {
 
     #[test]
     fn test_message_creation() {
-        let msg = AgentMessage::user("Hello");
+        let msg = LLMRequest::user("Hello");
         assert_eq!(msg.role, "user");
         assert_eq!(msg.content, "Hello");
 
-        let sys = AgentMessage::system("System prompt");
+        let sys = LLMRequest::system("System prompt");
         assert_eq!(sys.role, "system");
     }
 }

@@ -1,6 +1,6 @@
 use crate::error::{ModelError, Result};
-use crate::llm::traits::language_model::{
-    AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+use crate::llm::traits::ll_model::{
+    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
@@ -43,8 +43,8 @@ struct OllamaMessage {
 }
 
 #[async_trait]
-impl LanguageModel for OllamaProvider {
-    async fn do_chat(&self, messages: &[AgentMessage]) -> Result<ModelReply> {
+impl LLModel for OllamaProvider {
+    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
         let url = format!("{}/api/chat", self.base_url);
 
         // Debug logging
@@ -98,7 +98,7 @@ impl LanguageModel for OllamaProvider {
 
         let ollama_resp: OllamaResponse = response.json().await.map_err(ModelError::Request)?;
 
-        Ok(ModelReply {
+        Ok(LLMReply {
             content: ollama_resp.message.content,
             model: self.default_model.clone(),
             usage: TokenUsage::default(), // Ollama usage not parsed yet
@@ -107,26 +107,26 @@ impl LanguageModel for OllamaProvider {
         })
     }
 
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelReply> {
+    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(AgentMessage::system(sys));
+            messages.push(LLMRequest::system(sys));
         }
-        messages.push(AgentMessage::user(prompt));
+        messages.push(LLMRequest::user(prompt));
         self.do_chat(&messages).await
     }
 
     async fn chat_with_tools(
         &self,
-        messages: &[AgentMessage],
+        messages: &[LLMRequest],
         _tools: &[ToolDefinition],
-    ) -> Result<ModelReply> {
+    ) -> Result<LLMReply> {
         // For now, just ignore tools and chat normally
         self.do_chat(messages).await
     }
 
-    fn model_info(&self) -> LlmInfo {
-        LlmInfo {
+    fn model_info(&self) -> LLmInfo {
+        LLmInfo {
             provider: "ollama".to_string(),
             model: self.default_model.clone(),
             max_tokens: 4096, // Default assumption
