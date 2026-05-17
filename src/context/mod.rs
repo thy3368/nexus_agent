@@ -5,6 +5,10 @@ use crate::llm::traits::ll_model::LLMRequest;
 use std::path::PathBuf;
 use tokio::fs;
 
+pub mod agent_context;
+pub mod context_provider;
+pub mod prompt_builder;
+
 const HISTORY_FILE_NAME: &str = "history.json";
 
 pub struct ContextManager {
