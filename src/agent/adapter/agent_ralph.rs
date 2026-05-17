@@ -1,7 +1,7 @@
 use crate::config::Config;
+use crate::context::agent_context::AgentContext;
 use crate::formatter::ResponseFormatter;
-use crate::llm::traits::ll_model::{LLMRequest, LLModel};
-use crate::tool::traits::prompt_builder::SystemPromptBuilder;
+use crate::llm::traits::ll_model::LLModel;
 use crate::tool::traits::tool_executor::ToolExecutor;
 use kameo::Actor;
 
@@ -9,9 +9,8 @@ use kameo::Actor;
 pub struct AgentRalph {
     model: Box<dyn LLModel>,
     tool_executor: ToolExecutor,
-    prompt_builder: SystemPromptBuilder,
+    context: AgentContext,
     config: Config,
     formatter: ResponseFormatter,
     iteration_count: usize,
-    conversation_history: Vec<LLMRequest>,
 }

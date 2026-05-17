@@ -6,14 +6,13 @@ use crate::agent::mode::AgentMode;
 use crate::agent::traits::agent_trait::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
-use crate::formatter::ResponseFormatter;
 use crate::permissions::PermissionManager;
 use crate::skill::SkillManager;
 use kameo::Actor;
 
 use crate::llm::traits::ll_model::{LLMReply, LLMRequest, LLModel};
+use crate::context::agent_context::AgentContext;
 use crate::tool::tool_registry::ToolRegistry;
-use crate::tool::traits::prompt_builder::SystemPromptBuilder;
 use crate::tool::traits::tool_executor::ToolExecutor;
 use crate::tool::traits::tool_parser::{ModelResponseParser, ParsedResponse};
 
@@ -22,14 +21,14 @@ use crate::tool::traits::tool_parser::{ModelResponseParser, ParsedResponse};
 pub struct AgentReAct {
     model: Box<dyn LLModel>,
     tool_executor: ToolExecutor,
-    prompt_builder: SystemPromptBuilder,
+    context: AgentContext,
     config: Config,
-    formatter: ResponseFormatter,
-    iteration_count: usize,
-    conversation_history: Vec<LLMRequest>,
     skill_manager: Option<Arc<SkillManager>>,
     mode: AgentMode,
 }
+
+
+///todo     conversation_history: Vec<LLMRequest>,      prompt_builder: SystemPromptBuilder, 抽象到上下文管理
 
 impl AgentReAct {
     /// Create a new agent
@@ -37,14 +36,14 @@ impl AgentReAct {
         model: Box<dyn LLModel>,
         tools: ToolRegistry,
         config: Config,
-        conversation_history: Vec<LLMRequest>,
+        context: AgentContext,
         permission_manager: Arc<Mutex<PermissionManager>>,
     ) -> Result<Self> {
         Self::new_with_skills(
             model,
             tools,
             config,
-            conversation_history,
+            context,
             permission_manager,
             None,
         )
@@ -55,20 +54,12 @@ impl AgentReAct {
         model: Box<dyn LLModel>,
         tools: ToolRegistry,
         config: Config,
-        conversation_history: Vec<LLMRequest>,
+        context: AgentContext,
         permission_manager: Arc<Mutex<PermissionManager>>,
         mode: AgentMode,
     ) -> Result<Self> {
-        Self::new_with_skills_and_mode(
-            model,
-            tools,
-            config,
-            conversation_history,
-            permission_manager,
-            None,
-            mode,
-        )
-        .await
+        Self::new_with_skills_and_mode(model, tools, config, context, permission_manager, None, mode)
+            .await
     }
 
     /// Create a new agent with optional skill support
@@ -76,7 +67,7 @@ impl AgentReAct {
         model: Box<dyn LLModel>,
         tools: ToolRegistry,
         config: Config,
-        conversation_history: Vec<LLMRequest>,
+        context: AgentContext,
         permission_manager: Arc<Mutex<PermissionManager>>,
         skill_manager: Option<Arc<SkillManager>>,
     ) -> Result<Self> {
@@ -84,7 +75,7 @@ impl AgentReAct {
             model,
             tools,
             config,
-            conversation_history,
+            context,
             permission_manager,
             skill_manager,
             AgentMode::Execute,
@@ -96,58 +87,44 @@ impl AgentReAct {
         model: Box<dyn LLModel>,
         tools: ToolRegistry,
         config: Config,
-        conversation_history: Vec<LLMRequest>,
+        context: AgentContext,
         permission_manager: Arc<Mutex<PermissionManager>>,
         skill_manager: Option<Arc<SkillManager>>,
         mode: AgentMode,
     ) -> Result<Self> {
         let safety_validator = crate::safety::SafetyValidator::new(config.clone())?;
-        let prompt_builder = SystemPromptBuilder::new().await?;
-        let formatter = ResponseFormatter::new();
         let tool_executor =
             ToolExecutor::new_with_mode(tools, permission_manager, safety_validator, mode);
 
         Ok(Self {
             model,
             tool_executor,
-            prompt_builder,
+            context,
             config,
-            formatter,
-            iteration_count: 0,
-            conversation_history,
             skill_manager,
             mode,
         })
     }
 
     /// Initialize conversation with system prompt and task
-    async fn init_context(&mut self, task: &str) -> Result<()> {
-        /// skill
+    async fn init_context(&mut self) -> Result<()> {
         let skill_context = self
             .skill_manager
             .as_ref()
-            .map(|manager| manager.render_prompt_context(&self.config, task));
-        /// system and tool
-        let system_prompt = self
-            .prompt_builder
-            .build_with_skills_and_mode(
+            .map(|manager| manager.render_prompt_context(&self.config, self.context.task()));
+        self.context
+            .initialize(
                 &self.config,
                 &self.tool_executor.tools,
                 skill_context.as_ref(),
                 self.mode,
             )
-            .await?;
-        self.conversation_history
-            .push(LLMRequest::system(system_prompt));
-
-        /// user
-        self.conversation_history.push(LLMRequest::user(task));
-        Ok(())
+            .await
     }
 
     /// Check if iteration limit exceeded
     fn check_iteration_limit(&self) -> Result<()> {
-        if self.iteration_count > self.config.safety.max_iterations {
+        if self.context.iteration_count() > self.config.safety.max_iterations {
             return Err(AgentError::MaxIterationsExceeded.into());
         }
         Ok(())
@@ -158,7 +135,7 @@ impl AgentReAct {
         AgentResult {
             success,
             output,
-            iterations: self.iteration_count,
+            iterations: self.context.iteration_count(),
             tool_calls,
         }
     }
@@ -168,16 +145,17 @@ impl AgentReAct {
 impl Agent for AgentReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
-        self.iteration_count = 0;
-        self.init_context(&task).await?;
+        self.context.set_task(task);
+        self.context.reset_iterations();
+        self.init_context().await?;
 
         let mut tool_calls = Vec::new();
 
         loop {
-            self.iteration_count += 1;
+            self.context.increment_iterations();
             self.check_iteration_limit()?;
 
-            let response = self.model.chat(&self.conversation_history, None).await?;
+            let response = self.model.chat(self.context.history(), None).await?;
 
             match ModelResponseParser::parse_with_mode(&response.content, self.mode) {
                 ParsedResponse::ToolCall(tool_call) => {
@@ -203,27 +181,24 @@ impl Agent for AgentReAct {
 
                     let observation =
                         format!("Tool '{}' result: {}", tool_call.name, call_result.output);
-                    self.conversation_history
-                        .push(LLMRequest::user(observation));
+                    self.context.push(LLMRequest::user(observation));
                 }
                 ParsedResponse::ProposedPlan(plan_text) => {
                     tracing::info!(
-                        iterations = self.iteration_count,
+                        iterations = self.context.iteration_count(),
                         tools_used = tool_calls.len(),
                         "Plan proposed successfully"
                     );
-                    self.conversation_history
-                        .push(LLMRequest::assistant(response.content.clone()));
+                    self.context.push(LLMRequest::assistant(response.content.clone()));
                     return Ok(self.create_result(true, plan_text, tool_calls));
                 }
                 ParsedResponse::Complete => {
                     tracing::info!(
-                        iterations = self.iteration_count,
+                        iterations = self.context.iteration_count(),
                         tools_used = tool_calls.len(),
                         "Task completed successfully"
                     );
-                    self.conversation_history
-                        .push(LLMRequest::assistant(response.content.clone()));
+                    self.context.push(LLMRequest::assistant(response.content.clone()));
                     return Ok(self.create_result(true, response.content, tool_calls));
                 }
                 ParsedResponse::Incomplete(_) => {
@@ -243,29 +218,24 @@ impl Agent for AgentReAct {
                             response.content.chars().take(200).collect::<String>()
                         )
                     };
-                    self.conversation_history.push(LLMRequest::user(prompt));
+                    self.context.push(LLMRequest::user(prompt));
                 }
             }
         }
     }
 
-    /// Format a response using the formatter
-    fn format_response(&self, content: &str) -> String {
-        self.formatter.format_response(content)
-    }
-
     /// Get conversation history (read-only)
     fn get_conversation_history(&self) -> &[LLMRequest] {
-        &self.conversation_history
+        self.context.history()
     }
 
     /// Clear conversation history
     fn clear_conversation_history(&mut self) {
-        self.conversation_history.clear();
+        self.context.clear();
     }
 
     /// Add message to conversation history
     fn add_to_history(&mut self, message: LLMRequest) {
-        self.conversation_history.push(message);
+        self.context.push(message);
     }
 }
