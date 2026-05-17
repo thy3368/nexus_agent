@@ -63,20 +63,16 @@ pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LLModel>> {
             )))
         }
         "claude" => {
-            let api_key = std::env::var("ANTHROPIC_API_KEY").ok().or_else(|| {
-                config
-                    .models
-                    .providers
-                    .get("claude")
-                    .and_then(|p| p.api_key.clone())
-            });
-
-            let api_key = api_key.ok_or_else(|| {
-                anyhow::anyhow!("ANTHROPIC_API_KEY not set. You can set it via:\n1. Environment variable: ANTHROPIC_API_KEY\n2. Config file: ~/.promptline/config.yaml (under models.providers.claude.api_key)")
+            let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
+                anyhow::anyhow!("ANTHROPIC_API_KEY not set. You can set it via environment variable: ANTHROPIC_API_KEY")
+            })?;
+            let base_url = std::env::var("ANTHROPIC_BASE_URL").map_err(|_| {
+                anyhow::anyhow!("ANTHROPIC_BASE_URL not set. You can set it via environment variable: ANTHROPIC_BASE_URL")
             })?;
 
             Ok(Box::new(ClaudeProvider::new(
                 api_key,
+                base_url,
                 Some(config.models.default.clone()),
                 config.agent.llm_log_dir.clone(),
             )))

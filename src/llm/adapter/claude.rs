@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 pub struct ClaudeProvider {
     api_key: String,
+    base_url: String,
     model: String,
     temperature: f32,
     max_tokens: usize,
@@ -18,10 +19,16 @@ pub struct ClaudeProvider {
 }
 
 impl ClaudeProvider {
-    pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
+    pub fn new(
+        api_key: String,
+        base_url: String,
+        model: Option<String>,
+        llm_log_dir: Option<PathBuf>,
+    ) -> Self {
         Self {
             api_key,
-            model: model.unwrap_or_else(|| "claude-3-5-sonnet-latest".to_string()),
+            base_url,
+            model: model.unwrap_or_else(|| "claude-sonnet-4-6".to_string()),
             temperature: 0.3,
             max_tokens: 4096,
             client: Client::new(),
@@ -36,7 +43,7 @@ impl ClaudeProvider {
     }
 
     async fn request_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
-        let url = "https://api.anthropic.com/v1/messages";
+        let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
 
         let mut system_messages = Vec::new();
         let mut chat_messages = Vec::new();
@@ -156,19 +163,26 @@ mod tests {
     fn test_claude_provider_creation() {
         let provider = ClaudeProvider::new(
             "test-key".to_string(),
-            Some("claude-3-5-sonnet-latest".to_string()),
+            "https://api.anthropic.com".to_string(),
+            Some("claude-sonnet-4-6".to_string()),
             None,
         );
         let info = provider.model_info();
 
         assert_eq!(info.provider, "claude");
-        assert_eq!(info.model, "claude-3-5-sonnet-latest");
+        assert_eq!(info.model, "claude-sonnet-4-6");
         assert_eq!(info.max_tokens, 4096);
     }
 
     #[test]
     fn test_claude_provider_with_params() {
-        let provider = ClaudeProvider::new("test-key".to_string(), None, None).with_params(0.5, 2048);
+        let provider = ClaudeProvider::new(
+            "test-key".to_string(),
+            "https://api.anthropic.com".to_string(),
+            None,
+            None,
+        )
+        .with_params(0.5, 2048);
 
         assert_eq!(provider.temperature, 0.5);
         assert_eq!(provider.max_tokens, 2048);

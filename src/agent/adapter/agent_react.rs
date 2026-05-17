@@ -1,6 +1,7 @@
 //! Domain layer: Pure Agent business logic without framework dependencies
 
 use std::sync::{Arc, Mutex};
+use rand::{distributions::Alphanumeric, Rng};
 
 use crate::agent::mode::AgentMode;
 use crate::agent::traits::agent_trait::{Agent, AgentResult};
@@ -66,27 +67,6 @@ impl AgentReAct {
         })
     }
 
-    /// Initialize conversation with system prompt and task
-    async fn init_context(&mut self) -> Result<()> {
-        let skill_context = self.context.render_skill_context(&self.config);
-        self.context
-            .initialize(
-                &self.config,
-                &self.tool_executor.tools,
-                skill_context.as_ref(),
-                self.mode,
-            )
-            .await
-    }
-
-    /// Check if iteration limit exceeded
-    fn check_iteration_limit(&self) -> Result<()> {
-        if self.context.iteration_count() > self.config.safety.max_iterations {
-            return Err(AgentError::MaxIterationsExceeded.into());
-        }
-        Ok(())
-    }
-
     /// Create agent result
     fn create_result(&self, success: bool, output: String, tool_calls: Vec<String>) -> AgentResult {
         AgentResult {
@@ -102,17 +82,34 @@ impl AgentReAct {
 impl Agent for AgentReAct {
     /// Run the agent on a task using ReACT (Reasoning, Acting, Observing) loop
     async fn execute_task(&mut self, task: String) -> Result<AgentResult> {
+        // Generate session ID for this task execution
+        let session_id: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(8)
+            .map(char::from)
+            .collect();
+
         self.context.set_task(task);
         self.context.reset_iterations();
-        self.init_context().await?;
+        let skill_context = self.context.render_skill_context(&self.config);
+        self.context
+            .initialize(
+                &self.config,
+                &self.tool_executor.tools,
+                skill_context.as_ref(),
+                self.mode,
+            )
+            .await;
 
         let mut tool_calls = Vec::new();
 
         loop {
             self.context.increment_iterations();
-            self.check_iteration_limit()?;
+            if self.context.iteration_count() > self.config.safety.max_iterations {
+                return Err(AgentError::MaxIterationsExceeded.into());
+            }
 
-            let response = self.model.chat(self.context.history(), None).await?;
+            let response = self.model.chat(self.context.history(), None, Some(&session_id)).await?;
 
             match ModelResponseParser::parse_with_mode(&response.content, self.mode) {
                 ParsedResponse::ToolCall(tool_call) => {
@@ -146,7 +143,8 @@ impl Agent for AgentReAct {
                         tools_used = tool_calls.len(),
                         "Plan proposed successfully"
                     );
-                    self.context.push(LLMRequest::assistant(response.content.clone()));
+                    self.context
+                        .push(LLMRequest::assistant(response.content.clone()));
                     return Ok(self.create_result(true, plan_text, tool_calls));
                 }
                 ParsedResponse::Complete => {
@@ -155,7 +153,8 @@ impl Agent for AgentReAct {
                         tools_used = tool_calls.len(),
                         "Task completed successfully"
                     );
-                    self.context.push(LLMRequest::assistant(response.content.clone()));
+                    self.context
+                        .push(LLMRequest::assistant(response.content.clone()));
                     return Ok(self.create_result(true, response.content, tool_calls));
                 }
                 ParsedResponse::Incomplete(_) => {
@@ -171,7 +170,7 @@ impl Agent for AgentReAct {
                         )
                     } else {
                         format!(
-                            "You said: \"{}\"\n\nPlease either:\n1. Use a tool to complete the task, OR\n2. Say FINISH if the task is done.",
+                            "You said: \"{}\"\n\nThis task is not complete yet. Continue by calling a tool, and use update_plan first if the task has multiple steps. Do not say FINISH until you have completed the full task and already provided the final deliverable.",
                             response.content.chars().take(200).collect::<String>()
                         )
                     };

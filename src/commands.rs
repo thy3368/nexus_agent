@@ -227,7 +227,7 @@ Aliases:
                             "openai" => "gpt-3.5-turbo".to_string(),
                             "ollama" => "llama2".to_string(),
                             "gemini" => "gemini-pro".to_string(),
-                            "claude" => "claude-3-5-sonnet-latest".to_string(),
+                            "claude" => "claude-sonnet-4-6".to_string(),
                             "minimax" => "MiniMax-M1-80k".to_string(),
                             _ => "default".to_string(),
                         }
