@@ -7,7 +7,12 @@ use crate::prompt::templates::TemplateManager;
 use crate::skill::model::SkillPromptContext;
 use crate::tool::tool_registry::ToolRegistry;
 
-use crate::tool::traits::context_provider::ContextProvider;
+use crate::context::context_provider::ContextProvider;
+
+const DEFAULT_SYSTEM_PROMPT: &str = include_str!("../../prompts/system_prompt.md");
+const EXECUTE_MODE_PROMPT: &str = include_str!("../../prompts/execute_mode.md");
+const PLAN_MODE_PROMPT: &str = include_str!("../../prompts/plan_mode.md");
+const SYSTEM_PROMPT_WRAPPER: &str = include_str!("../../prompts/system_prompt_wrapper.md");
 
 pub struct SystemPromptBuilder {
     template_manager: TemplateManager,
@@ -125,28 +130,8 @@ impl SystemPromptBuilder {
         }
 
         let mode_instructions = match mode {
-            AgentMode::Execute => {
-                r#"PLAN TRACKING:
-- For multi-step work, use update_plan to maintain a concise checklist.
-- Keep at most one step in_progress at a time.
-- Mark completed steps as completed before finishing.
-- Do not use update_plan for trivial one-step tasks.
-"#
-            }
-            AgentMode::Plan => {
-                r#"PLAN MODE:
-- You are in read-only Plan Mode until this task completes.
-- User intent, tone, or imperative wording does not authorize implementation.
-- You may inspect the workspace with read-only tools only.
-- Do not modify files, apply patches, run mutating shell commands, commit, install dependencies, or alter configuration.
-- Do not call update_plan; it is a TODO/checklist tool for execution mode only.
-- Ask clarifying questions if requirements are ambiguous.
-- When ready, finalize with exactly one markdown implementation plan wrapped in:
-<proposed_plan>
-...
-</proposed_plan>
-"#
-            }
+            AgentMode::Execute => EXECUTE_MODE_PROMPT,
+            AgentMode::Plan => PLAN_MODE_PROMPT,
         };
 
         let mut final_prompt = String::new();
@@ -154,73 +139,21 @@ impl SystemPromptBuilder {
             final_prompt.push_str(&format!("Project Context:\n```\n{}\n```\n\n", context));
         }
 
-        final_prompt.push_str(&format!(
-            r###"{}
+        let wrapper = SYSTEM_PROMPT_WRAPPER
+            .replace("{{base_prompt}}", &base_prompt)
+            .replace("{{current_dir}}", &current_dir)
+            .replace("{{project_type}}", &project_type)
+            .replace("{{git_info}}", &git_info)
+            .replace("{{skills_section}}", &skills_section)
+            .replace("{{mode_instructions}}", mode_instructions)
+            .replace("{{tool_descriptions}}", &tool_descriptions.join("\n"));
 
-Current working directory: {}
-Current project type: {}
-{}
-
-IDENTITY & BRANDING:
-You are PromptLine, an advanced AI-powered CLI agent.
-- You are NOT "Cogito", "Claude", "GPT", or any other model.
-- You are a helpful, professional, and witty engineering assistant.
-- If asked about your identity, always reply that you are PromptLine.
-- Do not apologize excessively. Be concise and action-oriented.
-
-OUTPUT FORMAT:
-- Use Markdown for all responses.
-- Use emojis sparingly but effectively to convey status (e.g., 🔍 for search, 📝 for writing).
-- Keep responses clean and structured.
-
-{}
-{}
-AVAILABLE TOOLS:
-{}
-
-TOOL USAGE RULES:
-1. When you need to use a tool, output ONLY the JSON, nothing else:
-   {{"tool": "tool_name", "args": {{"arg": "value"}}}}
-2. Do NOT explain what you will do before using a tool.
-3. After using a tool, wait for the result before saying FINISH.
-4. When the task is complete, respond with: FINISH
-
-Always explain your reasoning before taking an action."###,
-            base_prompt,
-            current_dir,
-            project_type,
-            git_info,
-            skills_section,
-            mode_instructions,
-            tool_descriptions.join("\n")
-        ));
+        final_prompt.push_str(&wrapper);
 
         Ok(final_prompt)
     }
 
     fn default_system_prompt(&self) -> String {
-        r###"You are PromptLine, an AI coding assistant built to help developers with their tasks.
-
-IDENTITY:
-- Your name is PromptLine (not Cogito, Claude, GPT, or any other model name)
-- You are a professional, helpful coding assistant
-- Never mention your underlying model or AI provider
-
-IMPORTANT GUIDELINES:
-- For simple greetings (hi, hello, hey) or casual conversation, just respond naturally WITHOUT using any tools, then say FINISH
-- Only use tools when the user asks you to DO something specific (read a file, search code, list files, etc.)
-- When you use a tool, output the JSON directly - do NOT explain what you're doing
-- **CRITICAL - When to say FINISH**:
-  - If you call a tool, do NOT say FINISH in the same response. Just output the tool call JSON.
-  - Only say FINISH after you have the tool result and have given the user their final answer.
-  - Never write "FINISH" after a tool call - wait for the tool result first.
-- Be concise and professional in your responses
-
-SPECIAL RULES:
-1. If the user asks to "run" something, USE `shell_execute`. Do not just explain how to run it.
-2. If you write a file that needs to be run, immediately follow up with `shell_execute` to run it.
-3. **NEW PROJECT RULE**: If asked to create a new project, ALWAYS create a new directory first using `shell_execute` (e.g., `mkdir my-app`). Then write files into that directory.
-   - **EXCEPTION**: If the user explicitly asks to modify the *current* project, work in the current directory.
-4. Don't use tools for simple conversation - just chat naturally!"###.to_string()
+        DEFAULT_SYSTEM_PROMPT.to_string()
     }
 }
