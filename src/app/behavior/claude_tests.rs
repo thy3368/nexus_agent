@@ -51,16 +51,19 @@ fn task_fixture_path() -> std::path::PathBuf {
 async fn test_agent_with_claude_example() {
     init_logging();
 
-    let api_key =
-        std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
-    let base_url =
-        std::env::var("ANTHROPIC_BASE_URL").expect("ANTHROPIC_BASE_URL environment variable not set");
+    let api_key = std::env::var("ANTHROPIC_API_KEY2")
+        .expect("ANTHROPIC_API_KEY environment variable not set");
+    let base_url = std::env::var("ANTHROPIC_BASE_URL2")
+        .expect("ANTHROPIC_BASE_URL environment variable not set");
 
     let mut config = Config::load().unwrap_or_default();
     config.safety.require_approval = false;
     config.skills.project_skills = false;
     config.skills.user_skills = false;
     config.skills.roots = vec![skill_fixture_root()];
+
+    // let api_key = "sk-TVgrUR42PDf2CkM02k36A0SsSvbDjuabd1lyR2CxzIEl95Ek";
+    // let base_url = "https://way.ydata.vip";
 
     let claude_provider = ClaudeProvider::new(
         api_key,
@@ -148,8 +151,7 @@ async fn test_agent_with_claude_example() {
         .await
         .expect("Failed to create agent");
 
-    let task = std::fs::read_to_string(task_fixture_path())
-        .expect("Failed to read task fixture");
+    let task = std::fs::read_to_string(task_fixture_path()).expect("Failed to read task fixture");
 
     match agent.execute_task(task).await {
         Ok(result) => {
