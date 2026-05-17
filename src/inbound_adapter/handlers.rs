@@ -3,6 +3,7 @@ use crate::agent::adapter::agent_react::AgentReAct;
 use crate::agent::mode::AgentMode;
 use crate::app::behavior::Agent;
 use crate::config::Config;
+use crate::context::agent_context::AgentContext;
 use crate::setup;
 
 pub async fn handle_init() -> anyhow::Result<()> {
@@ -90,11 +91,12 @@ async fn run_agent_task(
     let permission_manager = setup::create_permission_manager()?;
     let skill_manager = setup::create_skill_manager(&config)?;
 
+    let context = AgentContext::new(Vec::new()).await?;
     let mut agent = AgentReAct::new_with_skills_and_mode(
         model,
         tools,
         config,
-        Vec::new(),
+        context,
         permission_manager,
         Some(skill_manager),
         mode,

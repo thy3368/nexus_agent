@@ -7,6 +7,8 @@ use crate::agent::mode::AgentMode;
 use crate::app::behavior::Agent;
 use crate::commands::CommandHandler;
 use crate::config::Config;
+use crate::context::agent_context::AgentContext;
+use crate::formatter::ResponseFormatter;
 use crate::repl::ReplHelper;
 use crate::setup;
 use crate::skill::SkillManager;
@@ -26,11 +28,12 @@ impl ReplSession {
         let permission_manager = setup::create_permission_manager()?;
         let skill_manager = setup::create_skill_manager(&config)?;
 
+        let context = AgentContext::new(Vec::new()).await?;
         let agent = AgentReAct::new_with_skills(
             model,
             tools,
             config.clone(),
-            Vec::new(),
+            context,
             permission_manager.clone(),
             Some(skill_manager.clone()),
         )
@@ -54,11 +57,12 @@ impl ReplSession {
         let model = setup::create_model(&self.config)?;
         let tools = setup::create_tools();
         let permission_manager = setup::create_permission_manager()?;
+        let context = AgentContext::new(Vec::new()).await?;
         let mut agent = AgentReAct::new_with_skills_and_mode(
             model,
             tools,
             self.config.clone(),
-            Vec::new(),
+            context,
             permission_manager,
             Some(self.skill_manager.clone()),
             AgentMode::Plan,
@@ -68,7 +72,8 @@ impl ReplSession {
         match agent.execute_task(task).await {
             Ok(result) => {
                 if !result.output.is_empty() {
-                    println!("{}\n", agent.format_response(&result.output));
+                    let formatter = ResponseFormatter::new();
+                    println!("{}\n", formatter.format_response(&result.output));
                 }
             }
             Err(e) => {
@@ -164,7 +169,8 @@ impl ReplSession {
                             let response_content = &result.output;
 
                             if !response_content.is_empty() && response_content != "FINISH" {
-                                let formatted = self.agent.format_response(response_content);
+                                let formatter = ResponseFormatter::new();
+                                let formatted = formatter.format_response(response_content);
                                 println!("{}\n", formatted);
                             }
                         }
