@@ -20,12 +20,17 @@ pub struct KimiProvider {
 
 impl KimiProvider {
     pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
+        let client = Client::builder()
+            .no_proxy()
+            .build()
+            .expect("failed to build Kimi HTTP client");
+
         Self {
             api_key,
             model: model.unwrap_or_else(|| "moonshot-v1".to_string()),
             temperature: 0.3,
             max_tokens: 4096,
-            client: Client::new(),
+            client,
             llm_log_dir,
         }
     }

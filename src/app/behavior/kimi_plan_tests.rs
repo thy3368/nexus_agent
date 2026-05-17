@@ -84,7 +84,7 @@ async fn test_agent_kimi_plan_mode_proposes_plan_without_mutation() {
         ],
     );
 
-    let context = AgentContext::new(Vec::new())
+    let context = AgentContext::new(Vec::new(), None)
         .await
         .expect("Failed to create agent context");
     let mut agent = AgentReAct::new_with_mode(

@@ -94,7 +94,7 @@ mod tests {
         config.safety.require_approval = false;
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
-        let context = AgentContext::new(Vec::<LLMRequest>::new()).await.unwrap();
+        let context = AgentContext::new(Vec::<LLMRequest>::new(), None).await.unwrap();
 
         let agent = AgentReAct::new(model, tools, config, context, permission_manager)
             .await
@@ -130,7 +130,7 @@ mod tests {
         config.safety.require_approval = false;
 
         let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
-        let context = AgentContext::new(Vec::<LLMRequest>::new()).await.unwrap();
+        let context = AgentContext::new(Vec::<LLMRequest>::new(), None).await.unwrap();
 
         let agent = AgentReAct::new(model, tools, config, context, permission_manager)
             .await

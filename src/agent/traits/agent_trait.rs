@@ -20,9 +20,6 @@ pub trait Agent: Send + Sync {
     /// Execute a task using ReACT loop
     async fn execute_task(&mut self, task: String) -> crate::Result<AgentResult>;
 
-    /// Format response for display
-    fn format_response(&self, content: &str) -> String;
-
     /// Get conversation history (read-only)
     fn get_conversation_history(&self) -> &[LLMRequest];
 

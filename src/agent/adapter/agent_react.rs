@@ -7,11 +7,10 @@ use crate::agent::traits::agent_trait::{Agent, AgentResult};
 use crate::config::Config;
 use crate::error::{AgentError, Result};
 use crate::permissions::PermissionManager;
-use crate::skill::SkillManager;
 use kameo::Actor;
 
-use crate::llm::traits::ll_model::{LLMReply, LLMRequest, LLModel};
 use crate::context::agent_context::AgentContext;
+use crate::llm::traits::ll_model::{LLMRequest, LLModel};
 use crate::tool::tool_registry::ToolRegistry;
 use crate::tool::traits::tool_executor::ToolExecutor;
 use crate::tool::traits::tool_parser::{ModelResponseParser, ParsedResponse};
@@ -23,12 +22,8 @@ pub struct AgentReAct {
     tool_executor: ToolExecutor,
     context: AgentContext,
     config: Config,
-    skill_manager: Option<Arc<SkillManager>>,
     mode: AgentMode,
 }
-
-
-///todo     conversation_history: Vec<LLMRequest>,      prompt_builder: SystemPromptBuilder, 抽象到上下文管理
 
 impl AgentReAct {
     /// Create a new agent
@@ -39,13 +34,13 @@ impl AgentReAct {
         context: AgentContext,
         permission_manager: Arc<Mutex<PermissionManager>>,
     ) -> Result<Self> {
-        Self::new_with_skills(
+        Self::new_with_mode(
             model,
             tools,
             config,
             context,
             permission_manager,
-            None,
+            AgentMode::Execute,
         )
         .await
     }
@@ -58,40 +53,6 @@ impl AgentReAct {
         permission_manager: Arc<Mutex<PermissionManager>>,
         mode: AgentMode,
     ) -> Result<Self> {
-        Self::new_with_skills_and_mode(model, tools, config, context, permission_manager, None, mode)
-            .await
-    }
-
-    /// Create a new agent with optional skill support
-    pub async fn new_with_skills(
-        model: Box<dyn LLModel>,
-        tools: ToolRegistry,
-        config: Config,
-        context: AgentContext,
-        permission_manager: Arc<Mutex<PermissionManager>>,
-        skill_manager: Option<Arc<SkillManager>>,
-    ) -> Result<Self> {
-        Self::new_with_skills_and_mode(
-            model,
-            tools,
-            config,
-            context,
-            permission_manager,
-            skill_manager,
-            AgentMode::Execute,
-        )
-        .await
-    }
-
-    pub async fn new_with_skills_and_mode(
-        model: Box<dyn LLModel>,
-        tools: ToolRegistry,
-        config: Config,
-        context: AgentContext,
-        permission_manager: Arc<Mutex<PermissionManager>>,
-        skill_manager: Option<Arc<SkillManager>>,
-        mode: AgentMode,
-    ) -> Result<Self> {
         let safety_validator = crate::safety::SafetyValidator::new(config.clone())?;
         let tool_executor =
             ToolExecutor::new_with_mode(tools, permission_manager, safety_validator, mode);
@@ -101,17 +62,13 @@ impl AgentReAct {
             tool_executor,
             context,
             config,
-            skill_manager,
             mode,
         })
     }
 
     /// Initialize conversation with system prompt and task
     async fn init_context(&mut self) -> Result<()> {
-        let skill_context = self
-            .skill_manager
-            .as_ref()
-            .map(|manager| manager.render_prompt_context(&self.config, self.context.task()));
+        let skill_context = self.context.render_skill_context(&self.config);
         self.context
             .initialize(
                 &self.config,

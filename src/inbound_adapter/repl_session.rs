@@ -28,14 +28,13 @@ impl ReplSession {
         let permission_manager = setup::create_permission_manager()?;
         let skill_manager = setup::create_skill_manager(&config)?;
 
-        let context = AgentContext::new(Vec::new()).await?;
-        let agent = AgentReAct::new_with_skills(
+        let context = AgentContext::new(Vec::new(), Some(skill_manager.clone())).await?;
+        let agent = AgentReAct::new(
             model,
             tools,
             config.clone(),
             context,
             permission_manager.clone(),
-            Some(skill_manager.clone()),
         )
         .await?;
 
@@ -57,14 +56,13 @@ impl ReplSession {
         let model = setup::create_model(&self.config)?;
         let tools = setup::create_tools();
         let permission_manager = setup::create_permission_manager()?;
-        let context = AgentContext::new(Vec::new()).await?;
-        let mut agent = AgentReAct::new_with_skills_and_mode(
+        let context = AgentContext::new(Vec::new(), Some(self.skill_manager.clone())).await?;
+        let mut agent = AgentReAct::new_with_mode(
             model,
             tools,
             self.config.clone(),
             context,
             permission_manager,
-            Some(self.skill_manager.clone()),
             AgentMode::Plan,
         )
         .await?;

@@ -91,14 +91,13 @@ async fn run_agent_task(
     let permission_manager = setup::create_permission_manager()?;
     let skill_manager = setup::create_skill_manager(&config)?;
 
-    let context = AgentContext::new(Vec::new()).await?;
-    let mut agent = AgentReAct::new_with_skills_and_mode(
+    let context = AgentContext::new(Vec::new(), Some(skill_manager)).await?;
+    let mut agent = AgentReAct::new_with_mode(
         model,
         tools,
         config,
         context,
         permission_manager,
-        Some(skill_manager),
         mode,
     )
     .await?;

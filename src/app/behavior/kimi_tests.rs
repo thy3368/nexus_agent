@@ -122,16 +122,15 @@ async fn test_agent_with_kimi_example() {
         .load_for_config(&config, std::path::Path::new("."))
         .expect("Failed to load skills");
 
-    let context = AgentContext::new(Vec::new())
+    let context = AgentContext::new(Vec::new(), Some(skill_manager))
         .await
         .expect("Failed to create agent context");
-    let mut agent = AgentReAct::new_with_skills(
+    let mut agent = AgentReAct::new(
         model,
         tools,
         config,
         context,
         permission_manager,
-        Some(skill_manager),
     )
     .await
     .expect("Failed to create agent");

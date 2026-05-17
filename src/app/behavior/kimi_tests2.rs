@@ -116,7 +116,7 @@ async fn test_agent_kimi_multi_turn() {
     .unwrap();
     drop(pm);
 
-    let context = AgentContext::new(Vec::new())
+    let context = AgentContext::new(Vec::new(), None)
         .await
         .expect("Failed to create agent context");
     let mut agent = AgentReAct::new(model, tools, config, context, permission_manager)

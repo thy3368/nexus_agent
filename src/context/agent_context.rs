@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use crate::agent::mode::AgentMode;
 use crate::config::Config;
 use crate::context::prompt_builder::SystemPromptBuilder;
@@ -7,31 +8,36 @@ use crate::llm::traits::ll_model::LLMRequest;
 use crate::skill::model::SkillPromptContext;
 use crate::skill::SkillManager;
 use crate::tool::tool_registry::ToolRegistry;
-use crate::tool::traits::tool_executor::ToolExecutor;
 
 pub struct AgentContext {
-
-
-
-  /// todo   skill_manager: Option<Arc<SkillManager>>,
-
+    skill_manager: Option<Arc<SkillManager>>,
     prompt_builder: SystemPromptBuilder,
 
-    /// 流水账
+    ///状态管理
     conversation_history: Vec<LLMRequest>,
     iteration_count: usize,
     task: String,
 }
 
 impl AgentContext {
-    pub async fn new(conversation_history: Vec<LLMRequest>) -> Result<Self> {
+    pub async fn new(
+        conversation_history: Vec<LLMRequest>,
+        skill_manager: Option<Arc<SkillManager>>,
+    ) -> Result<Self> {
         let prompt_builder = SystemPromptBuilder::new().await?;
         Ok(Self {
+            skill_manager,
             prompt_builder,
             conversation_history,
             task: String::new(),
             iteration_count: 0,
         })
+    }
+
+    pub fn render_skill_context(&self, config: &Config) -> Option<SkillPromptContext> {
+        self.skill_manager
+            .as_ref()
+            .map(|manager| manager.render_prompt_context(config, self.task()))
     }
 
     pub async fn initialize(
