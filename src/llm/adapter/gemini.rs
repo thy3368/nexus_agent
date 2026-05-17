@@ -2,7 +2,7 @@
 
 use crate::error::{ModelError, Result};
 use crate::llm::traits::ll_model::{
-    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
+    LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
@@ -66,10 +66,14 @@ impl LLModel for GeminiProvider {
 
         messages.push(LLMRequest::user(prompt));
 
-        self.do_chat(&messages).await
+        self.do_chat(&messages, None).await
     }
 
-    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
+    async fn do_chat(
+        &self,
+        messages: &[LLMRequest],
+        _tools: Option<&[ToolDefinition]>,
+    ) -> Result<LLMReply> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -135,18 +139,8 @@ impl LLModel for GeminiProvider {
         })
     }
 
-    async fn chat_with_tools(
-        &self,
-        messages: &[LLMRequest],
-        _tools: &[ToolDefinition],
-    ) -> Result<LLMReply> {
-        // For MVP, use regular chat
-        // Gemini supports function calling but we'll implement it in Phase 2
-        self.do_chat(messages).await
-    }
-
-    fn model_info(&self) -> LLmInfo {
-        LLmInfo {
+    fn model_info(&self) -> LLMInfo {
+        LLMInfo {
             provider: "gemini".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,

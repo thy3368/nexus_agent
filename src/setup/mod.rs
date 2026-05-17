@@ -2,9 +2,10 @@ use crate::permissions::PermissionManager;
 use crate::skill::SkillManager;
 
 use crate::config::Config;
+use crate::llm::adapter::kimi::KimiProvider;
 use crate::llm::adapter::ollama::OllamaProvider;
 use crate::llm::adapter::openai::OpenAIProvider;
-use crate::llm::traits::language_model::LanguageModel;
+use crate::llm::traits::ll_model::LLModel;
 use crate::tool::adapter::{
     apply_patch, file_ops, git_ops, image_ops, mcp, plan, search_ops, shell, tool_search,
     unified_exec, web_ops,
@@ -12,7 +13,7 @@ use crate::tool::adapter::{
 use crate::tool::tool_registry::ToolRegistry;
 use std::sync::{Arc, Mutex};
 
-pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {
+pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LLModel>> {
     let provider = std::env::var("PROMPTLINE_PROVIDER").unwrap_or_else(|_| "openai".to_string());
 
     match provider.as_str() {
@@ -35,6 +36,26 @@ pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {
                 base_url,
                 api_key,
                 Some(config.models.default.clone()),
+                config.agent.llm_log_dir.clone(),
+            )))
+        }
+        "kimi" => {
+            let api_key = std::env::var("KIMI_API_KEY").ok().or_else(|| {
+                config
+                    .models
+                    .providers
+                    .get("kimi")
+                    .and_then(|p| p.api_key.clone())
+            });
+
+            let api_key = api_key.ok_or_else(|| {
+                anyhow::anyhow!("KIMI_API_KEY not set. You can set it via:\n1. Environment variable: KIMI_API_KEY\n2. Config file: ~/.promptline/config.yaml (under models.providers.kimi.api_key)")
+            })?;
+
+            Ok(Box::new(KimiProvider::new(
+                api_key,
+                Some(config.models.default.clone()),
+                config.agent.llm_log_dir.clone(),
             )))
         }
         "openai" | _ => {
@@ -53,6 +74,7 @@ pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LanguageModel>> {
             Ok(Box::new(OpenAIProvider::new(
                 api_key,
                 Some(config.models.default.clone()),
+                config.agent.llm_log_dir.clone(),
             )))
         }
     }

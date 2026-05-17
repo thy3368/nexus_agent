@@ -1,18 +1,20 @@
 use crate::error::{ModelError, Result};
 use crate::llm::traits::ll_model::{
-    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
+    LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
+use std::path::{Path, PathBuf};
 
 pub struct OllamaProvider {
     client: Client,
     base_url: String,
     api_key: Option<String>,
     default_model: String,
+    llm_log_dir: Option<PathBuf>,
 }
 
 impl OllamaProvider {
@@ -20,12 +22,14 @@ impl OllamaProvider {
         base_url: Option<String>,
         api_key: Option<String>,
         default_model: Option<String>,
+        llm_log_dir: Option<PathBuf>,
     ) -> Self {
         Self {
             client: Client::new(),
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
             api_key,
             default_model: default_model.unwrap_or_else(|| "llama2".to_string()),
+            llm_log_dir,
         }
     }
 }
@@ -44,7 +48,11 @@ struct OllamaMessage {
 
 #[async_trait]
 impl LLModel for OllamaProvider {
-    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
+    async fn do_chat(
+        &self,
+        messages: &[LLMRequest],
+        _tools: Option<&[ToolDefinition]>,
+    ) -> Result<LLMReply> {
         let url = format!("{}/api/chat", self.base_url);
 
         // Debug logging
@@ -113,25 +121,20 @@ impl LLModel for OllamaProvider {
             messages.push(LLMRequest::system(sys));
         }
         messages.push(LLMRequest::user(prompt));
-        self.do_chat(&messages).await
+        self.do_chat(&messages, None).await
     }
 
-    async fn chat_with_tools(
-        &self,
-        messages: &[LLMRequest],
-        _tools: &[ToolDefinition],
-    ) -> Result<LLMReply> {
-        // For now, just ignore tools and chat normally
-        self.do_chat(messages).await
-    }
-
-    fn model_info(&self) -> LLmInfo {
-        LLmInfo {
+    fn model_info(&self) -> LLMInfo {
+        LLMInfo {
             provider: "ollama".to_string(),
             model: self.default_model.clone(),
             max_tokens: 4096, // Default assumption
             supports_tools: false,
             supports_streaming: false,
         }
+    }
+
+    fn llm_log_dir(&self) -> Option<&Path> {
+        self.llm_log_dir.as_deref()
     }
 }

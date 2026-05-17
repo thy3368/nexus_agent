@@ -1,7 +1,7 @@
 //! Prompt template management
 
 use crate::error::{PromptLineError, Result};
-use crate::llm::traits::language_model::AgentMessage;
+use crate::llm::traits::ll_model::LLMRequest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ pub struct PromptTemplate {
     pub description: String,
     pub template: String,
     pub variables: HashMap<String, String>,
-    pub few_shot_examples: Option<Vec<AgentMessage>>,
+    pub few_shot_examples: Option<Vec<LLMRequest>>,
 }
 
 pub struct TemplateManager {

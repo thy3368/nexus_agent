@@ -1,12 +1,13 @@
 use crate::error::{ModelError, Result};
 use crate::llm::traits::ll_model::{
-    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage, ToolCall,
+    LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage, ToolCall,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::path::{Path, PathBuf};
 
 pub struct KimiProvider {
     api_key: String,
@@ -14,16 +15,18 @@ pub struct KimiProvider {
     temperature: f32,
     max_tokens: usize,
     client: Client,
+    llm_log_dir: Option<PathBuf>,
 }
 
 impl KimiProvider {
-    pub fn new(api_key: String, model: Option<String>) -> Self {
+    pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
         Self {
             api_key,
             model: model.unwrap_or_else(|| "moonshot-v1".to_string()),
             temperature: 0.3,
             max_tokens: 4096,
             client: Client::new(),
+            llm_log_dir,
         }
     }
 
@@ -33,7 +36,7 @@ impl KimiProvider {
         self
     }
 
-    async fn do_chat_with_tools(
+    async fn request_chat(
         &self,
         messages: &[LLMRequest],
         tools: Option<Vec<KimiTool>>,
@@ -188,35 +191,37 @@ impl LLModel for KimiProvider {
             messages.push(LLMRequest::system(sys));
         }
         messages.push(LLMRequest::user(prompt));
-        self.do_chat(&messages).await
+        self.do_chat(&messages, None).await
     }
 
-    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
-        self.do_chat_with_tools(messages, None).await
-    }
-
-    async fn chat_with_tools(
+    async fn do_chat(
         &self,
         messages: &[LLMRequest],
-        tools: &[ToolDefinition],
+        tools: Option<&[ToolDefinition]>,
     ) -> Result<LLMReply> {
-        let kimi_tools: Vec<KimiTool> = tools
-            .iter()
-            .map(|tool| KimiTool {
-                tool_type: "function".to_string(),
-                function: KimiToolFunction {
-                    name: tool.name.clone(),
-                    description: tool.description.clone(),
-                    parameters: tool.parameters.clone(),
-                },
-            })
-            .collect();
+        let kimi_tools = tools.map(|tools| {
+            tools
+                .iter()
+                .map(|tool| KimiTool {
+                    tool_type: "function".to_string(),
+                    function: KimiToolFunction {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    },
+                })
+                .collect()
+        });
 
-        self.do_chat_with_tools(messages, Some(kimi_tools)).await
+        self.request_chat(messages, kimi_tools).await
     }
 
-    fn model_info(&self) -> LLmInfo {
-        LLmInfo {
+    fn llm_log_dir(&self) -> Option<&Path> {
+        self.llm_log_dir.as_deref()
+    }
+
+    fn model_info(&self) -> LLMInfo {
+        LLMInfo {
             provider: "kimi".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
@@ -232,17 +237,21 @@ mod tests {
 
     #[test]
     fn test_kimi_provider_creation() {
-        let provider = KimiProvider::new("test-key".to_string(), Some("moonshot-v1".to_string()));
+        let provider = KimiProvider::new(
+            "test-key".to_string(),
+            Some("moonshot-v1".to_string()),
+            None,
+        );
         let info = provider.model_info();
 
         assert_eq!(info.provider, "kimi");
         assert_eq!(info.model, "moonshot-v1");
-        assert!(!info.supports_tools);
+        assert!(info.supports_tools);
     }
 
     #[test]
     fn test_kimi_provider_with_params() {
-        let provider = KimiProvider::new("test-key".to_string(), None).with_params(0.5, 2048);
+        let provider = KimiProvider::new("test-key".to_string(), None, None).with_params(0.5, 2048);
 
         assert_eq!(provider.temperature, 0.5);
         assert_eq!(provider.max_tokens, 2048);
@@ -250,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_kimi_provider_default_model() {
-        let provider = KimiProvider::new("test-key".to_string(), None);
+        let provider = KimiProvider::new("test-key".to_string(), None, None);
         let info = provider.model_info();
 
         assert_eq!(info.model, "moonshot-v1");
@@ -286,11 +295,11 @@ mod tests {
         let api_key = std::env::var("KIMI_API_KEY")
             .expect("KIMI_API_KEY environment variable not set. Run: KIMI_API_KEY='your-key' cargo test test_kimi_chat_real -- --ignored --nocapture");
 
-        let provider = KimiProvider::new(api_key, Some("moonshot-v1".to_string()));
+        let provider = KimiProvider::new(api_key, Some("moonshot-v1".to_string()), None);
 
         let messages = vec![LLMRequest::user("你好，请用一句话介绍你自己")];
 
-        let response = provider.do_chat(&messages).await;
+        let response = provider.do_chat(&messages, None).await;
 
         match response {
             Ok(resp) => {
@@ -316,7 +325,7 @@ mod tests {
         let api_key = std::env::var("KIMI_API_KEY")
             .expect("KIMI_API_KEY environment variable not set. Run: KIMI_API_KEY='your-key' cargo test test_kimi_complete_real -- --ignored --nocapture");
 
-        let provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
+        let provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()), None);
 
         let response = provider
             .complete(

@@ -6,7 +6,7 @@ use crate::agent::adapter::agent_react::AgentReAct;
 use crate::agent::traits::Agent;
 use crate::config::Config;
 use crate::llm::adapter::kimi::KimiProvider;
-use crate::llm::traits::language_model::LanguageModel;
+use crate::llm::traits::ll_model::LLModel;
 
 use crate::permissions::PermissionManager;
 use crate::skill::SkillManager;
@@ -38,14 +38,23 @@ fn skill_fixture_root() -> std::path::PathBuf {
 /// KIMI_API_KEY="your-api-key" cargo test test_agent_with_kimi_example -- --ignored --nocapture
 /// ```
 #[tokio::test]
-#[ignore]
 async fn test_agent_with_kimi_example() {
     init_logging();
 
     let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
 
-    let kimi_provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
-    let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
+    let mut config = Config::load().unwrap_or_default();
+    config.safety.require_approval = false;
+    config.skills.project_skills = false;
+    config.skills.user_skills = false;
+    config.skills.roots = vec![skill_fixture_root()];
+
+    let kimi_provider = KimiProvider::new(
+        api_key,
+        Some("moonshot-v1-8k".to_string()),
+        config.agent.llm_log_dir.clone(),
+    );
+    let model: Box<dyn LLModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
     tools.register(FileListTool::new());
@@ -57,12 +66,6 @@ async fn test_agent_with_kimi_example() {
     tools.register(GitCommitTool::new());
     tools.register(CodebaseSearchTool::new());
     tools.register(WebGetTool::new());
-
-    let mut config = Config::default();
-    config.safety.require_approval = false;
-    config.skills.project_skills = false;
-    config.skills.user_skills = false;
-    config.skills.roots = vec![skill_fixture_root()];
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
     let mut pm = permission_manager.lock().unwrap();
@@ -168,8 +171,15 @@ async fn test_agent_kimi_multi_turn() {
 
     let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
 
-    let kimi_provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
-    let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
+    let mut config = Config::load().unwrap_or_default();
+    config.safety.require_approval = false;
+
+    let kimi_provider = KimiProvider::new(
+        api_key,
+        Some("moonshot-v1-8k".to_string()),
+        config.agent.llm_log_dir.clone(),
+    );
+    let model: Box<dyn LLModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
     tools.register(FileListTool::new());

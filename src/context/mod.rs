@@ -1,7 +1,7 @@
 //! Context management for PromptLine
 
 use crate::error::Result;
-use crate::llm::traits::language_model::AgentMessage;
+use crate::llm::traits::ll_model::LLMRequest;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -30,18 +30,18 @@ impl ContextManager {
         self.context_dir.join(HISTORY_FILE_NAME)
     }
 
-    pub async fn load_history(&self) -> Result<Vec<AgentMessage>> {
+    pub async fn load_history(&self) -> Result<Vec<LLMRequest>> {
         let path = self.history_file_path();
         if path.exists() {
             let content = fs::read_to_string(&path).await?;
-            let history: Vec<AgentMessage> = serde_json::from_str(&content)?;
+            let history: Vec<LLMRequest> = serde_json::from_str(&content)?;
             Ok(history)
         } else {
             Ok(Vec::new())
         }
     }
 
-    pub async fn save_history(&self, history: &[AgentMessage]) -> Result<()> {
+    pub async fn save_history(&self, history: &[LLMRequest]) -> Result<()> {
         let path = self.history_file_path();
         let content = serde_json::to_string_pretty(history)?;
         fs::write(&path, content).await?;
@@ -102,8 +102,8 @@ mod tests {
         };
 
         let messages = vec![
-            AgentMessage::user("Hello"),
-            AgentMessage::assistant("Hi there"),
+            LLMRequest::user("Hello"),
+            LLMRequest::assistant("Hi there"),
         ];
 
         // Save history

@@ -34,8 +34,8 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::llm::traits::language_model::{
-        AgentMessage, LanguageModel, LlmInfo, ModelReply, TokenUsage,
+    use crate::llm::traits::ll_model::{
+        LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
     };
     use crate::permissions::PermissionManager;
     use crate::tool::tool_registry::ToolRegistry;
@@ -47,17 +47,21 @@ mod tests {
     }
 
     #[async_trait]
-    impl LanguageModel for MockModel {
-        async fn complete(&self, _: &str, _: Option<&str>) -> error::Result<ModelReply> {
+    impl LLModel for MockModel {
+        async fn complete(&self, _: &str, _: Option<&str>) -> error::Result<LLMReply> {
             unimplemented!()
         }
 
-        async fn do_chat(&self, _: &[AgentMessage]) -> error::Result<ModelReply> {
+        async fn do_chat(
+            &self,
+            _: &[LLMRequest],
+            _: Option<&[ToolDefinition]>,
+        ) -> error::Result<LLMReply> {
             let mut count = self.call_count.lock().unwrap();
             let response = self.responses[*count].clone();
             *count += 1;
 
-            Ok(ModelReply {
+            Ok(LLMReply {
                 content: response,
                 model: "mock".to_string(),
                 usage: TokenUsage::default(),
@@ -66,16 +70,8 @@ mod tests {
             })
         }
 
-        async fn chat_with_tools(
-            &self,
-            messages: &[AgentMessage],
-            _: &[ToolDefinition],
-        ) -> error::Result<ModelReply> {
-            self.do_chat(messages).await
-        }
-
-        fn model_info(&self) -> LlmInfo {
-            LlmInfo {
+        fn model_info(&self) -> LLMInfo {
+            LLMInfo {
                 provider: "mock".to_string(),
                 model: "test".to_string(),
                 max_tokens: 4096,

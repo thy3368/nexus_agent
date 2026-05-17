@@ -1,11 +1,15 @@
 // use crate::model::{ModelInfo, ToolDefinition};
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
+use chrono::Utc;
+use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::path::{Path, PathBuf};
 
 /// Model information
 #[derive(Debug, Clone)]
-pub struct LLmInfo {
+pub struct LLMInfo {
     pub provider: String,
     pub model: String,
     pub max_tokens: usize,
@@ -44,7 +48,7 @@ impl LLMRequest {
 }
 
 /// Token usage information
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct TokenUsage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
@@ -69,6 +73,50 @@ pub struct LLMReply {
     pub finish_reason: Option<String>,
 }
 
+fn sanitize_log_segment(value: &str) -> String {
+    let sanitized: String = value
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => ch,
+            _ => '-',
+        })
+        .collect();
+
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn build_log_file_prefix(info: &LLMInfo) -> String {
+    let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
+    let provider = sanitize_log_segment(&info.provider);
+    let model = sanitize_log_segment(&info.model);
+    let suffix: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(6)
+        .map(char::from)
+        .collect();
+
+    format!("{}-{}-{}-{}", timestamp, provider, model, suffix)
+}
+
+fn log_file_path(dir: &Path, prefix: &str, kind: &str) -> PathBuf {
+    dir.join(format!("{}-{}.json", prefix, kind))
+}
+
+async fn write_llm_log(path: PathBuf, payload: serde_json::Value) -> crate::Result<()> {
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    let content = serde_json::to_string_pretty(&payload)?;
+    tokio::fs::write(path, content).await?;
+    Ok(())
+}
+
 /// Language model provider trait
 #[async_trait]
 pub trait LLModel: Send + Sync {
@@ -80,9 +128,21 @@ pub trait LLModel: Send + Sync {
     ) -> crate::Result<LLMReply>;
 
     /// Generate a chat completion
-    async fn do_chat(&self, messages: &[LLMRequest]) -> crate::Result<LLMReply>;
+    async fn do_chat(
+        &self,
+        messages: &[LLMRequest],
+        tools: Option<&[ToolDefinition]>,
+    ) -> crate::Result<LLMReply>;
 
-    async fn chat(&self, messages: &[LLMRequest]) -> crate::Result<LLMReply> {
+    fn llm_log_dir(&self) -> Option<&Path> {
+        None
+    }
+
+    async fn chat(
+        &self,
+        messages: &[LLMRequest],
+        tools: Option<&[ToolDefinition]>,
+    ) -> crate::Result<LLMReply> {
         tracing::debug!(
             "\n[LLM CHAT] === Input Messages (count: {}) ===",
             messages.len()
@@ -91,11 +151,33 @@ pub trait LLModel: Send + Sync {
             tracing::debug!("[LLM CHAT] Message[{}] role={}", i, msg.role);
             tracing::debug!("[LLM CHAT] Message[{}] content:\n{}", i, msg.content);
         }
+        if let Some(tools) = tools {
+            let tool_names: Vec<_> = tools.iter().map(|tool| tool.name.as_str()).collect();
+            tracing::debug!("[LLM CHAT] tools (count={}): {:?}", tools.len(), tool_names);
+        }
         tracing::debug!("[LLM CHAT] === End Input ===\n");
 
-        //todo 我想把 每一次  request/reply 打印到一个单独的log文件中
+        let model_info = self.model_info();
+        let log_prefix = self.llm_log_dir().map(|_| build_log_file_prefix(&model_info));
 
-        let result = self.do_chat(messages).await;
+        if let (Some(log_dir), Some(prefix)) = (self.llm_log_dir(), log_prefix.as_deref()) {
+            let request_path = log_file_path(log_dir, prefix, "request");
+            let request_payload = json!({
+                "timestamp": Utc::now().to_rfc3339(),
+                "provider": model_info.provider,
+                "model": model_info.model,
+                "message_count": messages.len(),
+                "messages": messages,
+                "tool_count": tools.map_or(0, |items| items.len()),
+                "tool_names": tools.map(|items| items.iter().map(|tool| tool.name.clone()).collect::<Vec<_>>()).unwrap_or_default(),
+            });
+
+            if let Err(err) = write_llm_log(request_path.clone(), request_payload).await {
+                tracing::warn!(path = %request_path.display(), error = %err, "Failed to write LLM request log");
+            }
+        }
+
+        let result = self.do_chat(messages, tools).await;
 
         match &result {
             Ok(reply) => {
@@ -109,27 +191,51 @@ pub trait LLModel: Send + Sync {
                     tracing::debug!("[LLM CHAT] tool_calls: {:?}", tool_calls);
                 }
                 tracing::debug!("[LLM CHAT] === End Output ===\n");
+
+                if let (Some(log_dir), Some(prefix)) = (self.llm_log_dir(), log_prefix.as_deref()) {
+                    let reply_path = log_file_path(log_dir, prefix, "reply");
+                    let reply_payload = json!({
+                        "timestamp": Utc::now().to_rfc3339(),
+                        "provider": model_info.provider,
+                        "model": reply.model,
+                        "content": reply.content,
+                        "usage": reply.usage,
+                        "tool_calls": reply.tool_calls,
+                        "finish_reason": reply.finish_reason,
+                    });
+
+                    if let Err(err) = write_llm_log(reply_path.clone(), reply_payload).await {
+                        tracing::warn!(path = %reply_path.display(), error = %err, "Failed to write LLM reply log");
+                    }
+                }
             }
             Err(e) => {
                 tracing::error!("[LLM CHAT] === Error: {} ===", e);
+
+                if let (Some(log_dir), Some(prefix)) = (self.llm_log_dir(), log_prefix.as_deref()) {
+                    let error_path = log_file_path(log_dir, prefix, "error");
+                    let error_payload = json!({
+                        "timestamp": Utc::now().to_rfc3339(),
+                        "provider": model_info.provider,
+                        "model": model_info.model,
+                        "error": e.to_string(),
+                    });
+
+                    if let Err(err) = write_llm_log(error_path.clone(), error_payload).await {
+                        tracing::warn!(path = %error_path.display(), error = %err, "Failed to write LLM error log");
+                    }
+                }
             }
         }
 
         result
     }
-    /// Generate a chat completion with tool support
-    async fn chat_with_tools(
-        &self,
-        messages: &[LLMRequest],
-        tools: &[ToolDefinition],
-    ) -> crate::Result<LLMReply>;
 
     /// Get model information
-    fn model_info(&self) -> LLmInfo;
+    fn model_info(&self) -> LLMInfo;
 
     /// Estimate token count for text
     fn estimate_tokens(&self, text: &str) -> usize {
-        // Rough estimate: 1 token ≈ 4 characters
         (text.len() + 3) / 4
     }
 

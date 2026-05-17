@@ -7,7 +7,7 @@ use crate::agent::mode::AgentMode;
 use crate::agent::traits::Agent;
 use crate::config::Config;
 use crate::llm::adapter::kimi::KimiProvider;
-use crate::llm::traits::language_model::LanguageModel;
+use crate::llm::traits::ll_model::LLModel;
 use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::tool::adapter::file_ops::{FileListTool, FileReadTool, FileWriteTool};
 use crate::tool::adapter::git_ops::{GitCommitTool, GitDiffTool, GitStatusTool};
@@ -45,8 +45,18 @@ async fn test_agent_kimi_plan_mode_proposes_plan_without_mutation() {
     init_logging();
 
     let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
-    let kimi_provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()));
-    let model: Box<dyn LanguageModel> = Box::new(kimi_provider);
+
+    let mut config = Config::load().unwrap_or_default();
+    config.safety.require_approval = false;
+    config.skills.project_skills = false;
+    config.skills.user_skills = false;
+
+    let kimi_provider = KimiProvider::new(
+        api_key,
+        Some("moonshot-v1-8k".to_string()),
+        config.agent.llm_log_dir.clone(),
+    );
+    let model: Box<dyn LLModel> = Box::new(kimi_provider);
 
     let mut tools = ToolRegistry::new();
     tools.register(FileListTool::new());
@@ -59,11 +69,6 @@ async fn test_agent_kimi_plan_mode_proposes_plan_without_mutation() {
     tools.register(CodebaseSearchTool::new());
     tools.register(WebGetTool::new());
     tools.register(UpdatePlanTool::new());
-
-    let mut config = Config::default();
-    config.safety.require_approval = false;
-    config.skills.project_skills = false;
-    config.skills.user_skills = false;
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
     allow_tools(

@@ -2,20 +2,22 @@
 
 use crate::error::{ModelError, Result};
 use crate::llm::traits::ll_model::{
-    LLMRequest, LLModel, LLmInfo, LLMReply, TokenUsage,
+    LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
 use async_trait::async_trait;
+use std::path::{Path, PathBuf};
 
 pub struct OpenAIProvider {
     client: async_openai::Client<async_openai::config::OpenAIConfig>,
     model: String,
     temperature: f32,
     max_tokens: usize,
+    llm_log_dir: Option<PathBuf>,
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String, model: Option<String>) -> Self {
+    pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
         let config = async_openai::config::OpenAIConfig::new().with_api_key(api_key);
         let client = async_openai::Client::with_config(config);
 
@@ -24,6 +26,7 @@ impl OpenAIProvider {
             model: model.unwrap_or_else(|| "gpt-4".to_string()),
             temperature: 0.2,
             max_tokens: 4096,
+            llm_log_dir,
         }
     }
 
@@ -80,10 +83,14 @@ impl LLModel for OpenAIProvider {
 
         messages.push(LLMRequest::user(prompt));
 
-        self.do_chat(&messages).await
+        self.do_chat(&messages, None).await
     }
 
-    async fn do_chat(&self, messages: &[LLMRequest]) -> Result<LLMReply> {
+    async fn do_chat(
+        &self,
+        messages: &[LLMRequest],
+        _tools: Option<&[ToolDefinition]>,
+    ) -> Result<LLMReply> {
         use async_openai::types::*;
 
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
@@ -129,24 +136,18 @@ impl LLModel for OpenAIProvider {
         })
     }
 
-    async fn chat_with_tools(
-        &self,
-        messages: &[LLMRequest],
-        _tools: &[ToolDefinition],
-    ) -> Result<LLMReply> {
-        // For MVP, we'll use regular chat
-        // Phase 2 will add proper function calling support
-        self.do_chat(messages).await
-    }
-
-    fn model_info(&self) -> LLmInfo {
-        LLmInfo {
+    fn model_info(&self) -> LLMInfo {
+        LLMInfo {
             provider: "openai".to_string(),
             model: self.model.clone(),
             max_tokens: self.max_tokens,
             supports_tools: true,
             supports_streaming: true,
         }
+    }
+
+    fn llm_log_dir(&self) -> Option<&Path> {
+        self.llm_log_dir.as_deref()
     }
 
     fn supports_tools(&self) -> bool {
@@ -164,7 +165,11 @@ mod tests {
 
     #[test]
     fn test_openai_provider_creation() {
-        let provider = OpenAIProvider::new("test-key".to_string(), Some("gpt-4".to_string()));
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some("gpt-4".to_string()),
+            None,
+        );
         let info = provider.model_info();
 
         assert_eq!(info.provider, "openai");
@@ -174,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_message_conversion() {
-        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let provider = OpenAIProvider::new("test-key".to_string(), None, None);
 
         let msg = LLMRequest::user("Hello");
         let _converted = provider.convert_message(&msg);

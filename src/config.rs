@@ -180,6 +180,9 @@ pub struct AgentConfig {
 
     /// Default system prompt template to use
     pub default_system_prompt_template: Option<String>,
+
+    /// Directory for writing per-request LLM logs
+    pub llm_log_dir: Option<PathBuf>,
 }
 
 /// Skill system configuration
@@ -340,6 +343,7 @@ impl Default for AgentConfig {
             use_chain_of_thought: true,
             explain_before_action: true,
             default_system_prompt_template: None,
+            llm_log_dir: None,
         }
     }
 }
