@@ -1,0 +1,2 @@
+agent:
+  llm_log_dir: .promptline/llm-logs
