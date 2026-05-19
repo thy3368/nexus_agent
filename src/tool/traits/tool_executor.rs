@@ -1,5 +1,6 @@
 //! Tool executor for executing tools with permission and safety checks
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::agent::mode::AgentMode;
@@ -11,6 +12,7 @@ use crate::safety::SafetyValidator;
 use crate::tool::tool_registry::ToolRegistry;
 use crate::context::context_provider::ContextProvider;
 use crate::tool::traits::tool_handler::{ToolContext, ToolInvocation};
+use crate::util::json_log::{build_log_prefix, log_file_path, write_json_log};
 
 #[derive(Debug, Clone)]
 pub struct ToolCall {
@@ -31,6 +33,7 @@ pub struct ToolExecutor {
     safety_validator: SafetyValidator,
     formatter: ResponseFormatter,
     mode: AgentMode,
+    log_dir: Option<PathBuf>,
 }
 
 impl ToolExecutor {
@@ -44,6 +47,7 @@ impl ToolExecutor {
             permission_manager,
             safety_validator,
             AgentMode::Execute,
+            None,
         )
     }
 
@@ -52,6 +56,7 @@ impl ToolExecutor {
         permission_manager: Arc<Mutex<PermissionManager>>,
         safety_validator: SafetyValidator,
         mode: AgentMode,
+        log_dir: Option<PathBuf>,
     ) -> Self {
         Self {
             tools,
@@ -59,6 +64,7 @@ impl ToolExecutor {
             safety_validator,
             formatter: ResponseFormatter::new(),
             mode,
+            log_dir,
         }
     }
 
@@ -66,11 +72,26 @@ impl ToolExecutor {
         &self,
         tool_call: ToolCall,
         config: &Config,
+        session_id: &str,
     ) -> Result<ToolExecutionResult> {
         tracing::debug!("[TOOL EXEC] Input name={}", tool_call.name);
         tracing::debug!("[TOOL EXEC] Input args={}", tool_call.args);
 
-        let result = self.do_execute(tool_call, config).await;
+        if let Some(log_dir) = &self.log_dir {
+            let prefix = build_log_prefix("tool", &tool_call.name, session_id);
+            let path = log_file_path(log_dir, &prefix, "call");
+            let payload = serde_json::json!({
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "session_id": session_id,
+                "tool": tool_call.name,
+                "args": tool_call.args,
+            });
+            if let Err(err) = write_json_log(path.clone(), payload).await {
+                tracing::warn!(path = %path.display(), error = %err, "Failed to write tool call log");
+            }
+        }
+
+        let result = self.do_execute(tool_call.clone(), config).await;
 
         match &result {
             Ok(exec_result) => {
@@ -79,9 +100,39 @@ impl ToolExecutor {
                 if let Some(ref err) = exec_result.error {
                     tracing::debug!("[TOOL EXEC] Output error={}", err);
                 }
+
+                if let Some(log_dir) = &self.log_dir {
+                    let prefix = build_log_prefix("tool", &tool_call.name, session_id);
+                    let path = log_file_path(log_dir, &prefix, "result");
+                    let payload = serde_json::json!({
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                        "session_id": session_id,
+                        "tool": tool_call.name,
+                        "success": exec_result.success,
+                        "output": exec_result.output,
+                        "error": exec_result.error,
+                    });
+                    if let Err(err) = write_json_log(path.clone(), payload).await {
+                        tracing::warn!(path = %path.display(), error = %err, "Failed to write tool result log");
+                    }
+                }
             }
             Err(e) => {
                 tracing::debug!("[TOOL EXEC] Failed: {}", e);
+
+                if let Some(log_dir) = &self.log_dir {
+                    let prefix = build_log_prefix("tool", &tool_call.name, session_id);
+                    let path = log_file_path(log_dir, &prefix, "error");
+                    let payload = serde_json::json!({
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                        "session_id": session_id,
+                        "tool": tool_call.name,
+                        "error": e.to_string(),
+                    });
+                    if let Err(err) = write_json_log(path.clone(), payload).await {
+                        tracing::warn!(path = %path.display(), error = %err, "Failed to write tool error log");
+                    }
+                }
             }
         }
 

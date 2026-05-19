@@ -1,8 +1,8 @@
 // use crate::model::{ModelInfo, ToolDefinition};
 use crate::tool::traits::tool_handler::ToolDefinition;
+use crate::util::json_log::{build_log_prefix, log_file_path, write_json_log};
 use async_trait::async_trait;
 use chrono::Utc;
-use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -73,45 +73,6 @@ pub struct LLMReply {
     pub finish_reason: Option<String>,
 }
 
-fn sanitize_log_segment(value: &str) -> String {
-    let sanitized: String = value
-        .chars()
-        .map(|ch| match ch {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => ch,
-            _ => '-',
-        })
-        .collect();
-
-    let trimmed = sanitized.trim_matches('-');
-    if trimmed.is_empty() {
-        "unknown".to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn build_log_file_prefix(info: &LLMInfo, session_id: &str) -> String {
-    let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
-    let provider = sanitize_log_segment(&info.provider);
-    let model = sanitize_log_segment(&info.model);
-
-    format!("{}-{}-{}-{}", provider, model, session_id, timestamp)
-}
-
-fn log_file_path(dir: &Path, prefix: &str, kind: &str) -> PathBuf {
-    dir.join(format!("{}-{}.json", prefix, kind))
-}
-
-async fn write_llm_log(path: PathBuf, payload: serde_json::Value) -> crate::Result<()> {
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-
-    let content = serde_json::to_string_pretty(&payload)?;
-    tokio::fs::write(path, content).await?;
-    Ok(())
-}
-
 /// Language model provider trait
 #[async_trait]
 pub trait LLModel: Send + Sync {
@@ -165,7 +126,7 @@ pub trait LLModel: Send + Sync {
         let model_info = self.model_info();
         let log_prefix = self
             .llm_log_dir()
-            .map(|_| build_log_file_prefix(&model_info, session_id));
+            .map(|_| build_log_prefix(&model_info.provider, &model_info.model, session_id));
 
         if let (Some(log_dir), Some(prefix)) = (self.llm_log_dir(), log_prefix.as_deref()) {
             let request_path = log_file_path(log_dir, prefix, "request");
@@ -179,7 +140,7 @@ pub trait LLModel: Send + Sync {
                 "tool_names": tools.map(|items| items.iter().map(|tool| tool.name.clone()).collect::<Vec<_>>()).unwrap_or_default(),
             });
 
-            if let Err(err) = write_llm_log(request_path.clone(), request_payload).await {
+            if let Err(err) = write_json_log(request_path.clone(), request_payload).await {
                 tracing::warn!(path = %request_path.display(), error = %err, "Failed to write LLM request log");
             }
         }
@@ -216,7 +177,7 @@ pub trait LLModel: Send + Sync {
                         "finish_reason": reply.finish_reason,
                     });
 
-                    if let Err(err) = write_llm_log(reply_path.clone(), reply_payload).await {
+                    if let Err(err) = write_json_log(reply_path.clone(), reply_payload).await {
                         tracing::warn!(path = %reply_path.display(), error = %err, "Failed to write LLM reply log");
                     }
                 }
@@ -233,7 +194,7 @@ pub trait LLModel: Send + Sync {
                         "error": e.to_string(),
                     });
 
-                    if let Err(err) = write_llm_log(error_path.clone(), error_payload).await {
+                    if let Err(err) = write_json_log(error_path.clone(), error_payload).await {
                         tracing::warn!(path = %error_path.display(), error = %err, "Failed to write LLM error log");
                     }
                 }

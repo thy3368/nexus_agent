@@ -56,7 +56,7 @@ impl AgentReAct {
     ) -> Result<Self> {
         let safety_validator = crate::safety::SafetyValidator::new(config.clone())?;
         let tool_executor =
-            ToolExecutor::new_with_mode(tools, permission_manager, safety_validator, mode);
+            ToolExecutor::new_with_mode(tools, permission_manager, safety_validator, mode, config.agent.llm_log_dir.clone());
 
         Ok(Self {
             model,
@@ -115,7 +115,7 @@ impl Agent for AgentReAct {
                 ParsedResponse::ToolCall(tool_call) => {
                     let call_result = self
                         .tool_executor
-                        .execute(tool_call.clone(), &self.config)
+                        .execute(tool_call.clone(), &self.config, &session_id)
                         .await?;
 
                     tool_calls.push(tool_call.name.clone());

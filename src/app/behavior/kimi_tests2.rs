@@ -38,10 +38,14 @@ fn skill_fixture_root() -> std::path::PathBuf {
 /// KIMI_API_KEY="your-api-key" cargo test test_agent_kimi_multi_turn -- --ignored --nocapture
 /// ```
 #[tokio::test]
+#[ignore = "requires KIMI_API_KEY"]
 async fn test_agent_kimi_multi_turn() {
     init_logging();
 
-    let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
+    let api_key = match std::env::var("KIMI_API_KEY") {
+        Ok(v) => v,
+        Err(_) => { println!("KIMI_API_KEY not set, skipping"); return; }
+    };
 
     let mut config = Config::load().unwrap_or_default();
     config.safety.require_approval = false;

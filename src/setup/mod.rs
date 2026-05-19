@@ -107,6 +107,7 @@ pub fn create_model(config: &Config) -> anyhow::Result<Box<dyn LLModel>> {
 
             Ok(Box::new(OpenAIProvider::new(
                 api_key,
+                None,
                 Some(config.models.default.clone()),
                 config.agent.llm_log_dir.clone(),
             )))

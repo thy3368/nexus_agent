@@ -45,7 +45,10 @@ fn allow_tools(permission_manager: &Arc<Mutex<PermissionManager>>, tool_names: &
 async fn test_agent_kimi_plan_mode_proposes_plan_without_mutation() {
     init_logging();
 
-    let api_key = std::env::var("KIMI_API_KEY").expect("KIMI_API_KEY environment variable not set");
+    let api_key = match std::env::var("KIMI_API_KEY") {
+        Ok(v) => v,
+        Err(_) => { println!("KIMI_API_KEY not set, skipping"); return; }
+    };
 
     let mut config = Config::load().unwrap_or_default();
     config.safety.require_approval = false;

@@ -1,4 +1,4 @@
-//! Integration tests for Kimi provider
+//! Integration tests for GPT provider
 
 use std::sync::{Arc, Mutex};
 
@@ -6,13 +6,14 @@ use crate::agent::adapter::agent_react::AgentReAct;
 use crate::agent::traits::Agent;
 use crate::config::Config;
 use crate::context::agent_context::AgentContext;
-use crate::llm::adapter::kimi::KimiProvider;
+use crate::llm::adapter::openai::OpenAIProvider;
 use crate::llm::traits::ll_model::LLModel;
 
 use crate::permissions::PermissionManager;
 use crate::skill::SkillManager;
 use crate::tool::adapter::file_ops::{FileListTool, FileReadTool, FileWriteTool};
 use crate::tool::adapter::git_ops::{GitCommitTool, GitDiffTool, GitStatusTool};
+use crate::tool::adapter::plan::UpdatePlanTool;
 use crate::tool::adapter::search_ops::CodebaseSearchTool;
 use crate::tool::adapter::shell::ShellTool;
 use crate::tool::adapter::web_ops::WebGetTool;
@@ -32,20 +33,31 @@ fn skill_fixture_root() -> std::path::PathBuf {
         .join("skills")
 }
 
-/// Test: Single task with Kimi provider
+fn task_fixture_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("tasks")
+        .join("claude_todo_task.md")
+}
+
+/// Test: Single task with OpenAI provider
 ///
 /// Run with:
 /// ```bash
-/// KIMI_API_KEY="your-api-key" cargo test test_agent_with_kimi_example -- --ignored --nocapture
+/// OPENAI_API_KEY="your-api-key" cargo test test_agent_with_gpt_example -- --ignored --nocapture
 /// ```
 #[tokio::test]
-#[ignore = "requires KIMI_API_KEY"]
-async fn test_agent_with_kimi_example() {
+async fn test_agent_with_gpt_example() {
     init_logging();
 
-    let api_key = match std::env::var("KIMI_API_KEY") {
+    let api_key = match std::env::var("GPT_API_KEY") {
         Ok(v) => v,
-        Err(_) => { println!("KIMI_API_KEY not set, skipping"); return; }
+        Err(_) => { println!("GPT_API_KEY not set, skipping"); return; }
+    };
+    let base_url = match std::env::var("GPT_BASE_URL") {
+        Ok(v) => v,
+        Err(_) => { println!("GPT_BASE_URL not set, skipping"); return; }
     };
 
     let mut config = Config::load().unwrap_or_default();
@@ -54,12 +66,14 @@ async fn test_agent_with_kimi_example() {
     config.skills.user_skills = false;
     config.skills.roots = vec![skill_fixture_root()];
 
-    let kimi_provider = KimiProvider::new(
-        api_key,
-        Some("moonshot-v1-8k".to_string()),
+
+    let openai_provider = OpenAIProvider::new(
+        api_key.to_string(),
+        Some(base_url),
+        Some("gpt5.4".to_string()),
         config.agent.llm_log_dir.clone(),
     );
-    let model: Box<dyn LLModel> = Box::new(kimi_provider);
+    let model: Box<dyn LLModel> = Box::new(openai_provider);
 
     let mut tools = ToolRegistry::new();
     tools.register(FileListTool::new());
@@ -70,6 +84,7 @@ async fn test_agent_with_kimi_example() {
     tools.register(GitDiffTool::new());
     tools.register(GitCommitTool::new());
     tools.register(CodebaseSearchTool::new());
+    tools.register(UpdatePlanTool::new());
     tools.register(WebGetTool::new());
 
     let permission_manager = Arc::new(Mutex::new(PermissionManager::new().unwrap()));
@@ -115,6 +130,11 @@ async fn test_agent_with_kimi_example() {
     )
     .unwrap();
     pm.set_permission(
+        "update_plan".to_string(),
+        crate::permissions::PermissionLevel::Always,
+    )
+    .unwrap();
+    pm.set_permission(
         "web_get".to_string(),
         crate::permissions::PermissionLevel::Always,
     )
@@ -129,19 +149,13 @@ async fn test_agent_with_kimi_example() {
     let context = AgentContext::new(Vec::new(), Some(skill_manager))
         .await
         .expect("Failed to create agent context");
-    let mut agent = AgentReAct::new(
-        model,
-        tools,
-        config,
-        context,
-        permission_manager,
-    )
-    .await
-    .expect("Failed to create agent");
+    let mut agent = AgentReAct::new(model, tools, config, context, permission_manager)
+        .await
+        .expect("Failed to create agent");
 
-    let task = "Use $simple-checklist to answer: 写个 Rust hello world 示例。不要创建文件或执行命令，只返回文本。";
+    let task = std::fs::read_to_string(task_fixture_path()).expect("Failed to read task fixture");
 
-    match agent.execute_task(task.to_string()).await {
+    match agent.execute_task(task).await {
         Ok(result) => {
             println!("\n✅ Task completed successfully!");
             println!("  Success: {}", result.success);
@@ -161,6 +175,4 @@ async fn test_agent_with_kimi_example() {
         .map(|message| message.content.as_str())
         .expect("system prompt should be present");
     assert!(system_prompt.contains("<skills_instructions>"));
-    assert!(system_prompt.contains("<skill name=\"simple-checklist\""));
-    assert!(system_prompt.contains("When this skill is active"));
 }

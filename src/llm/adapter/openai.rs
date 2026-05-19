@@ -17,8 +17,16 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
-        let config = async_openai::config::OpenAIConfig::new().with_api_key(api_key);
+    pub fn new(
+        api_key: String,
+        base_url: Option<String>,
+        model: Option<String>,
+        llm_log_dir: Option<PathBuf>,
+    ) -> Self {
+        let mut config = async_openai::config::OpenAIConfig::new().with_api_key(api_key);
+        if let Some(base_url) = base_url {
+            config = config.with_api_base(base_url);
+        }
         let client = async_openai::Client::with_config(config);
 
         Self {
@@ -167,6 +175,7 @@ mod tests {
     fn test_openai_provider_creation() {
         let provider = OpenAIProvider::new(
             "test-key".to_string(),
+            None,
             Some("gpt-4".to_string()),
             None,
         );
@@ -179,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_message_conversion() {
-        let provider = OpenAIProvider::new("test-key".to_string(), None, None);
+        let provider = OpenAIProvider::new("test-key".to_string(), None, None, None);
 
         let msg = LLMRequest::user("Hello");
         let _converted = provider.convert_message(&msg);
