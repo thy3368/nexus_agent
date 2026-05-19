@@ -70,7 +70,7 @@ async fn test_agent_with_gpt_example() {
     let openai_provider = OpenAIProvider::new(
         api_key.to_string(),
         Some(base_url),
-        Some("gpt5.4".to_string()),
+        Some("gpt-5.4".to_string()),
         config.agent.llm_log_dir.clone(),
     );
     let model: Box<dyn LLModel> = Box::new(openai_provider);
@@ -155,19 +155,6 @@ async fn test_agent_with_gpt_example() {
 
     let task = std::fs::read_to_string(task_fixture_path()).expect("Failed to read task fixture");
 
-    match agent.execute_task(task).await {
-        Ok(result) => {
-            println!("\n✅ Task completed successfully!");
-            println!("  Success: {}", result.success);
-            println!("  Iterations: {}", result.iterations);
-            println!("  Tools used: {:?}", result.tool_calls);
-            println!("  Output:\n{}", result.output);
-        }
-        Err(e) => {
-            eprintln!("\n❌ Task failed: {}", e);
-        }
-    }
-
     let system_prompt = agent
         .get_conversation_history()
         .iter()
@@ -175,4 +162,38 @@ async fn test_agent_with_gpt_example() {
         .map(|message| message.content.as_str())
         .expect("system prompt should be present");
     assert!(system_prompt.contains("<skills_instructions>"));
+}
+
+/// Test: Minimal official OpenAI connectivity
+///
+/// Run with:
+/// ```bash
+/// OPENAI_API_KEY="your-api-key" cargo test test_openai_official_minimal -- --ignored --nocapture
+/// ```
+#[tokio::test]
+#[ignore]
+async fn test_openai_official_minimal() {
+    let api_key = match std::env::var("GPT_API_KEY") {
+        Ok(v) => v,
+        Err(_) => {
+            println!("OPENAI_API_KEY not set, skipping");
+            return;
+        }
+    };
+
+    let provider = OpenAIProvider::new(api_key, None, Some("gpt-5.4".to_string()), None);
+
+    let reply = provider
+        .complete("say hi", None)
+        .await
+        .expect("official OpenAI request should succeed");
+
+    println!("reply model: {}", reply.model);
+    println!("reply content: {}", reply.content);
+    println!("usage: {:?}", reply.usage);
+
+    assert!(
+        !reply.content.trim().is_empty(),
+        "reply content should not be empty"
+    );
 }

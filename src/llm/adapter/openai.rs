@@ -5,6 +5,11 @@ use crate::llm::traits::ll_model::{
     LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
 };
 use crate::tool::traits::tool_handler::ToolDefinition;
+use async_openai::types::chat::{
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
+    ChatCompletionRequestUserMessageContent, CreateChatCompletionRequestArgs,
+};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 
@@ -44,36 +49,28 @@ impl OpenAIProvider {
         self
     }
 
-    fn convert_message(
-        &self,
-        msg: &LLMRequest,
-    ) -> async_openai::types::ChatCompletionRequestMessage {
-        use async_openai::types::*;
-
+    fn convert_message(&self, msg: &LLMRequest) -> ChatCompletionRequestMessage {
         match msg.role.as_str() {
             "system" => ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                content: msg.content.clone(),
-                role: Role::System,
+                content: msg.content.clone().into(),
                 name: None,
             }),
             "user" => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
-                role: Role::User,
                 name: None,
             }),
-            "assistant" => {
-                ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                    content: Some(msg.content.clone()),
+            "assistant" => ChatCompletionRequestMessage::Assistant(
+                ChatCompletionRequestAssistantMessage {
+                    content: Some(msg.content.clone().into()),
                     name: None,
-                    role: Role::Assistant,
-                    #[allow(deprecated)]
-                    function_call: None,
+                    refusal: None,
                     tool_calls: None,
-                })
-            }
+                    function_call: None,
+                    audio: None,
+                },
+            ),
             _ => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
                 content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
-                role: Role::User,
                 name: None,
             }),
         }
@@ -99,15 +96,13 @@ impl LLModel for OpenAIProvider {
         messages: &[LLMRequest],
         _tools: Option<&[ToolDefinition]>,
     ) -> Result<LLMReply> {
-        use async_openai::types::*;
-
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
 
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .messages(openai_messages)
             .temperature(self.temperature)
-            .max_tokens(self.max_tokens as u16)
+            .max_completion_tokens(self.max_tokens as u32)
             .build()
             .map_err(|e| ModelError::Api(format!("Failed to build request: {}", e)))?;
 
@@ -159,7 +154,7 @@ impl LLModel for OpenAIProvider {
     }
 
     fn supports_tools(&self) -> bool {
-        self.model.starts_with("gpt-4") || self.model.starts_with("gpt-3.5")
+        self.model.starts_with("gpt-")
     }
 
     fn supports_streaming(&self) -> bool {
@@ -192,7 +187,5 @@ mod tests {
 
         let msg = LLMRequest::user("Hello");
         let _converted = provider.convert_message(&msg);
-
-        // Just testing that conversion doesn't panic
     }
 }
