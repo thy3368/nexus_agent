@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{fmt, io};
 
-pub use crate::tools::shell::shell_command::ShellCommand;
-pub use crate::tools::shell::shell_command::ShellProgram;
+pub use crate::tools::shell::types::ShellCommand;
+pub use crate::tools::shell::types::ShellProgram;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellRequest {
@@ -145,7 +145,7 @@ impl ShellExecutor for LocalShellExecutor {
 
 #[cfg(test)]
 mod tests {
-    use crate::tools::shell::shell_command::ShellProgram;
+    use crate::tools::shell::types::ShellProgram;
     use super::LocalShellExecutor;
     use super::ShellExecutor;
     use super::ShellRequest;
