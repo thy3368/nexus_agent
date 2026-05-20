@@ -1,7 +1,7 @@
 //! Git operation tools
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool_handler::{ToolContext, ToolHandler, ToolResult};
+use crate::tool::traits::tool_definition::{ToolContext, ToolMeta, ToolResult};
 use async_trait::async_trait;
 use tokio::process::Command;
 
@@ -23,7 +23,7 @@ impl Default for GitStatusTool {
 }
 
 #[async_trait]
-impl ToolHandler for GitStatusTool {
+impl ToolMeta for GitStatusTool {
     fn name(&self) -> &str {
         "git_status"
     }
@@ -87,7 +87,7 @@ impl Default for GitDiffTool {
 }
 
 #[async_trait]
-impl ToolHandler for GitDiffTool {
+impl ToolMeta for GitDiffTool {
     fn name(&self) -> &str {
         "git_diff"
     }
@@ -158,7 +158,7 @@ impl Default for GitCommitTool {
 }
 
 #[async_trait]
-impl ToolHandler for GitCommitTool {
+impl ToolMeta for GitCommitTool {
     fn name(&self) -> &str {
         "git_commit"
     }

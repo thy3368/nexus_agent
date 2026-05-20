@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::ToolError;
-use crate::tool::traits::tool_handler::{ToolContext, ToolHandler, ToolResult};
+use crate::tool::traits::tool_definition::{ToolContext, ToolMeta, ToolResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -73,7 +73,7 @@ impl Default for UpdatePlanTool {
 }
 
 #[async_trait]
-impl ToolHandler for UpdatePlanTool {
+impl ToolMeta for UpdatePlanTool {
     fn name(&self) -> &str {
         "update_plan"
     }

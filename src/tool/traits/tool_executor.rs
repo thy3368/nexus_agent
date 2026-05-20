@@ -11,7 +11,7 @@ use crate::permissions::{PermissionLevel, PermissionManager};
 use crate::safety::SafetyValidator;
 use crate::tool::tool_registry::ToolRegistry;
 use crate::context::context_provider::ContextProvider;
-use crate::tool::traits::tool_handler::{ToolContext, ToolInvocation};
+use crate::tool::traits::tool_definition::{ToolContext, ToolInvocation};
 use crate::util::json_log::{build_log_prefix, log_file_path, write_json_log};
 
 #[derive(Debug, Clone)]

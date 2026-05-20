@@ -1,7 +1,7 @@
 //! MCP tool adapters
 
 use crate::error::Result;
-use crate::tool::traits::tool_handler::{ToolContext, ToolHandler, ToolResult};
+use crate::tool::traits::tool_definition::{ToolContext, ToolMeta, ToolResult};
 use async_trait::async_trait;
 
 /// Skeleton MCP tool caller.
@@ -22,7 +22,7 @@ impl Default for McpTool {
 }
 
 #[async_trait]
-impl ToolHandler for McpTool {
+impl ToolMeta for McpTool {
     fn name(&self) -> &str {
         "mcp_call"
     }
@@ -98,7 +98,7 @@ impl Default for McpResourceTool {
 }
 
 #[async_trait]
-impl ToolHandler for McpResourceTool {
+impl ToolMeta for McpResourceTool {
     fn name(&self) -> &str {
         "mcp_read_resource"
     }

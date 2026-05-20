@@ -1,8 +1,8 @@
 //! Unified command execution tools
 
 use crate::error::{Result, ToolError};
-use crate::tool::traits::tool_handler::{
-    BoxToolFuture, ToolContext, ToolHandler, ToolInvocation, ToolResult,
+use crate::tool::traits::tool_definition::{
+    BoxToolFuture, ToolContext, ToolMeta, ToolInvocation, ToolResult,
 };
 use async_trait::async_trait;
 use std::path::PathBuf;
@@ -98,7 +98,7 @@ impl Default for ExecCommandTool {
 }
 
 #[async_trait]
-impl ToolHandler for ExecCommandTool {
+impl ToolMeta for ExecCommandTool {
     fn name(&self) -> &str {
         "exec_command"
     }
@@ -245,7 +245,7 @@ impl Default for WriteStdinTool {
 }
 
 #[async_trait]
-impl ToolHandler for WriteStdinTool {
+impl ToolMeta for WriteStdinTool {
     fn name(&self) -> &str {
         "write_stdin"
     }
