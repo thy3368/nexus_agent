@@ -1,9 +1,9 @@
 
-pub mod tools;
+pub mod core;
 
-pub mod tools_adapter_json;
+pub mod adapter_json;
 
-pub mod tools_adapter_cli;
+pub mod adapter_cli;
 
 
 

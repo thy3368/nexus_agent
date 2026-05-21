@@ -1,14 +1,14 @@
-use crate::tools::apply_patch::ApplyPatchExecutor;
-use crate::tools::apply_patch::LocalApplyPatchExecutor;
-use crate::tools::apply_patch::parse_patch;
-use crate::tools_adapter_json::JsonAdapterError;
-use crate::tools_adapter_json::JsonToolAdapter;
-use crate::tools_adapter_json::JsonToolCallType;
-use crate::tools_adapter_json::ToolDefinition;
-use crate::tools_adapter_json::read_workdir;
-use crate::tools_adapter_json::validate_tool_call_envelope;
-use serde_json::Value;
+use crate::core::apply_patch::parse_patch;
+use crate::core::apply_patch::ApplyPatchExecutor;
+use crate::core::apply_patch::LocalApplyPatchExecutor;
+
+use crate::adapter_json::ToolDefinition;
+
+use crate::adapter_json::types::{
+    validate_tool_call_envelope, JsonAdapterError, JsonToolAdapter, JsonToolCallType,
+};
 use serde_json::json;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -26,6 +26,15 @@ pub fn tool_definition() -> ToolDefinition {
         JsonToolCallType::CustomToolCall.as_str(),
         apply_patch_call_schema(),
     )
+}
+
+pub(crate) fn read_workdir(object: &Map<String, Value>) -> Option<PathBuf> {
+    object
+        .get("workdir")
+        .or_else(|| object.get("working_directory"))
+        .or_else(|| object.get("cwd"))
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
 }
 
 pub fn handle_apply_patch_call(request: Value) -> Result<Value, JsonAdapterError> {
@@ -77,7 +86,7 @@ pub fn apply_patch_call_schema() -> Value {
             "type": {
                 "type": "string",
                 "const": "custom_tool_call",
-                "description": "Codex-style JSON tool call type for freeform tools."
+                "description": "Codex-style JSON tool call type for freeform core."
             },
             "name": {
                 "type": "string",
@@ -128,9 +137,7 @@ impl ApplyPatchJsonCall {
         let call_id = object
             .get("call_id")
             .and_then(Value::as_str)
-            .ok_or_else(|| {
-                JsonAdapterError::InvalidRequest("missing `call_id`".to_string())
-            })?
+            .ok_or_else(|| JsonAdapterError::InvalidRequest("missing `call_id`".to_string()))?
             .to_string();
 
         let input = object
@@ -171,7 +178,7 @@ fn format_success_message(changed_paths: &[PathBuf]) -> String {
 mod tests {
     use super::apply_patch_call_schema;
     use super::handle_apply_patch_call;
-    use crate::tools_adapter_json::JsonAdapterError;
+    use crate::adapter_json::types::JsonAdapterError;
     use serde_json::json;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};

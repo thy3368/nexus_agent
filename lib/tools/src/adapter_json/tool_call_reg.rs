@@ -1,8 +1,7 @@
-use crate::tools_adapter_json::JsonAdapterError;
-use crate::tools_adapter_json::JsonToolCallType;
-use crate::tools_adapter_json::ToolDefinition;
-use crate::tools_adapter_json::apply_patch;
-use crate::tools_adapter_json::shell;
+use crate::adapter_json::apply_patch;
+use crate::adapter_json::shell;
+use crate::adapter_json::types::{JsonAdapterError, JsonToolCallType};
+use crate::adapter_json::ToolDefinition;
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -36,16 +35,16 @@ impl ToolHandlerEntry {
 fn default_tool_handlers() -> Vec<ToolHandlerEntry> {
     vec![
         ToolHandlerEntry::new(
-        JsonToolCallType::FunctionCall,
-        "shell_command",
-        shell::tool_definition,
-        shell::handle_shell_command_call,
+            JsonToolCallType::FunctionCall,
+            "shell_command",
+            shell::tool_definition,
+            shell::handle_shell_command_call,
         ),
         ToolHandlerEntry::new(
-        JsonToolCallType::CustomToolCall,
-        "apply_patch",
-        apply_patch::tool_definition,
-        apply_patch::handle_apply_patch_call,
+            JsonToolCallType::CustomToolCall,
+            "apply_patch",
+            apply_patch::tool_definition,
+            apply_patch::handle_apply_patch_call,
         ),
     ]
 }
@@ -73,8 +72,12 @@ impl ToolCallRegistry {
         definition: fn() -> ToolDefinition,
         handle_call: fn(Value) -> Result<Value, JsonAdapterError>,
     ) -> &mut Self {
-        self.handlers
-            .push(ToolHandlerEntry::new(call_type, name, definition, handle_call));
+        self.handlers.push(ToolHandlerEntry::new(
+            call_type,
+            name,
+            definition,
+            handle_call,
+        ));
         self
     }
 
@@ -132,9 +135,8 @@ pub fn tool_definition(tool_name: &str) -> Option<ToolDefinition> {
 #[cfg(test)]
 mod tests {
     use super::ToolCallRegistry;
-    use crate::tools_adapter_json::JsonAdapterError;
-    use crate::tools_adapter_json::JsonToolCallType;
-    use crate::tools_adapter_json::ToolDefinition;
+    use crate::adapter_json::types::{JsonAdapterError, JsonToolCallType};
+    use crate::adapter_json::ToolDefinition;
     use serde_json::json;
     use serde_json::Value;
 
@@ -159,7 +161,10 @@ mod tests {
 
         assert_eq!(definition.name, "shell_command");
         assert_eq!(definition.call_type, "function_call");
-        assert_eq!(definition.schema["properties"]["name"]["const"], "shell_command");
+        assert_eq!(
+            definition.schema["properties"]["name"]["const"],
+            "shell_command"
+        );
     }
 
     #[test]
@@ -177,6 +182,38 @@ mod tests {
 
         assert_eq!(response["type"], "function_call_output");
         assert_eq!(response["call_id"], "dispatch-shell");
+    }
+
+    #[test]
+    fn handle_tool_call_lists_current_directory_files() {
+        let current_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let list_command = if cfg!(windows) { "dir /b" } else { "ls -1" };
+
+        let response = ToolCallRegistry::default()
+            .handle_tool_call(json!({
+                "type": "function_call",
+                "name": "shell_command",
+                "call_id": "dispatch-list-dir",
+                "arguments": {
+                    "command": list_command,
+                    "workdir": current_dir,
+                }
+            }))
+            .expect("directory listing should succeed");
+
+        assert_eq!(response["type"], "function_call_output");
+        assert_eq!(response["call_id"], "dispatch-list-dir");
+        assert_eq!(response["success"], true);
+        println!(
+            "{}",
+            response["output"][0]["text"].as_str().expect("text output")
+        );
+        assert!(
+            response["output"][0]["text"]
+                .as_str()
+                .expect("text output")
+                .contains("Cargo.toml")
+        );
     }
 
     #[test]

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{fmt, io};
 
-pub use crate::tools::shell::types::ShellCommand;
-pub use crate::tools::shell::types::ShellProgram;
+pub use crate::core::shell::types::ShellCommand;
+pub use crate::core::shell::types::ShellProgram;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellRequest {
@@ -145,7 +145,7 @@ impl ShellExecutor for LocalShellExecutor {
 
 #[cfg(test)]
 mod tests {
-    use crate::tools::shell::types::ShellProgram;
+    use crate::core::shell::types::ShellProgram;
     use super::LocalShellExecutor;
     use super::ShellExecutor;
     use super::ShellRequest;
@@ -162,11 +162,11 @@ mod tests {
     #[test]
     fn executor_runs_command() {
         let output = LocalShellExecutor::new()
-            .execute(&ShellRequest::new("echo shell-tools").with_shell(ShellProgram::detect_default()))
+            .execute(&ShellRequest::new("echo shell-core").with_shell(ShellProgram::detect_default()))
             .expect("shell command should run");
 
         assert!(output.success());
-        assert!(output.stdout.contains("shell-tools"));
+        assert!(output.stdout.contains("shell-core"));
     }
 
     #[test]

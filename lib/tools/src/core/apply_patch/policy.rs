@@ -1,5 +1,5 @@
-use crate::tools::apply_patch::ApplyPatchAction;
-use crate::tools::apply_patch::ApplyPatchError;
+use crate::core::apply_patch::ApplyPatchAction;
+use crate::core::apply_patch::ApplyPatchError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApprovalRequirement {

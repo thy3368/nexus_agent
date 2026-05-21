@@ -1,16 +1,16 @@
-use crate::tools::shell::LocalShellExecutor;
-use crate::tools::shell::ShellExecutor;
-use crate::tools::shell::ShellOutput;
-use crate::tools::shell::ShellProgram;
-use crate::tools::shell::ShellRequest;
-use crate::tools_adapter_json::JsonAdapterError;
-use crate::tools_adapter_json::JsonToolAdapter;
-use crate::tools_adapter_json::JsonToolCallType;
-use crate::tools_adapter_json::ToolDefinition;
-use crate::tools_adapter_json::validate_tool_call_envelope;
+use crate::core::shell::LocalShellExecutor;
+use crate::core::shell::ShellExecutor;
+use crate::core::shell::ShellOutput;
+use crate::core::shell::ShellProgram;
+use crate::core::shell::ShellRequest;
+
+use crate::adapter_json::types::{
+    validate_tool_call_envelope, JsonAdapterError, JsonToolAdapter, JsonToolCallType,
+};
+use crate::adapter_json::ToolDefinition;
+use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
-use serde_json::json;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -118,7 +118,7 @@ pub fn shell_command_call_schema() -> Value {
             "type": {
                 "type": "string",
                 "const": "function_call",
-                "description": "Codex-style JSON tool call type for structured tools."
+                "description": "Codex-style JSON tool call type for structured core."
             },
             "name": {
                 "type": "string",
@@ -143,8 +143,6 @@ pub fn shell_command_call_schema() -> Value {
         "required": ["type", "name", "call_id", "arguments"]
     })
 }
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ShellJsonCall {
@@ -177,12 +175,12 @@ impl ShellJsonCall {
             Some(_) => {
                 return Err(JsonAdapterError::InvalidRequest(
                     "`arguments` must be a JSON string or object".to_string(),
-                ))
+                ));
             }
             None => {
                 return Err(JsonAdapterError::InvalidRequest(
                     "missing `arguments`".to_string(),
-                ))
+                ));
             }
         };
 
@@ -245,9 +243,7 @@ fn shell_program_from_hint(hint: &str) -> Option<ShellProgram> {
         "sh" => Some(ShellProgram::Sh),
         "bash" => Some(ShellProgram::Bash),
         "zsh" => Some(ShellProgram::Zsh),
-        "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" => {
-            Some(ShellProgram::PowerShell)
-        }
+        "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" => Some(ShellProgram::PowerShell),
         "cmd" | "cmd.exe" => Some(ShellProgram::Cmd),
         other if !other.is_empty() => Some(ShellProgram::Custom(other.to_string())),
         _ => None,
@@ -271,7 +267,7 @@ mod tests {
     use super::handle_shell_command_call;
     use super::shell_command_arguments_schema;
     use super::shell_command_call_schema;
-    use crate::tools_adapter_json::JsonAdapterError;
+    use crate::adapter_json::types::JsonAdapterError;
     use serde_json::json;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -386,7 +382,10 @@ mod tests {
             schema["required"],
             json!(["type", "name", "call_id", "arguments"])
         );
-        assert_eq!(schema["properties"]["arguments"]["oneOf"][1]["type"], "object");
+        assert_eq!(
+            schema["properties"]["arguments"]["oneOf"][1]["type"],
+            "object"
+        );
     }
 
     fn create_temp_test_dir(prefix: &str) -> PathBuf {

@@ -1,28 +1,26 @@
-mod apply_patch;
-mod shell;
-mod tool_call_reg;
-
-pub mod types;
-
-use serde_json::Map;
-use serde_json::Value;
 use std::fmt;
-use std::path::PathBuf;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::{Map, Value};
 
-pub use apply_patch::ApplyPatchJsonAdapter;
-pub use apply_patch::apply_patch_call_schema;
-pub use apply_patch::handle_apply_patch_call;
-pub use apply_patch::tool_definition as apply_patch_tool_definition;
-pub use shell::ShellCommandJsonAdapter;
-pub use shell::handle_shell_command_call;
-pub use shell::shell_command_arguments_schema;
-pub use shell::shell_command_call_schema;
-pub use shell::tool_definition as shell_command_tool_definition;
-pub use tool_call_reg::ToolCallRegistry;
-pub use tool_call_reg::handle_tool_call;
-pub use tool_call_reg::tool_definition;
-pub use tool_call_reg::tool_definitions;
-pub use types::ToolDefinition;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub call_type: String,
+    pub schema: Value,
+}
+
+impl ToolDefinition {
+    pub fn new(name: impl Into<String>, call_type: impl Into<String>, schema: Value) -> Self {
+        Self {
+            name: name.into(),
+            call_type: call_type.into(),
+            schema,
+        }
+    }
+}
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonAdapterError {
@@ -92,11 +90,3 @@ pub(crate) fn validate_tool_call_envelope<'a>(
     Ok(object)
 }
 
-pub(crate) fn read_workdir(object: &Map<String, Value>) -> Option<PathBuf> {
-    object
-        .get("workdir")
-        .or_else(|| object.get("working_directory"))
-        .or_else(|| object.get("cwd"))
-        .and_then(Value::as_str)
-        .map(PathBuf::from)
-}

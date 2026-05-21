@@ -1,5 +1,5 @@
-use crate::tools::apply_patch::ApplyPatchAction;
-use crate::tools::apply_patch::ApplyPatchFileChange;
+use crate::core::apply_patch::ApplyPatchAction;
+use crate::core::apply_patch::ApplyPatchFileChange;
 use std::collections::HashMap;
 use std::path::PathBuf;
 

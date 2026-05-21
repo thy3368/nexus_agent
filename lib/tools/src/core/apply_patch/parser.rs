@@ -1,6 +1,6 @@
-use crate::tools::apply_patch::ApplyPatchAction;
-use crate::tools::apply_patch::ApplyPatchError;
-use crate::tools::apply_patch::ApplyPatchFileChange;
+use crate::core::apply_patch::ApplyPatchAction;
+use crate::core::apply_patch::ApplyPatchError;
+use crate::core::apply_patch::ApplyPatchFileChange;
 use std::path::PathBuf;
 
 const BEGIN_PATCH: &str = "*** Begin Patch";
