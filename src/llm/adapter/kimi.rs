@@ -1,12 +1,9 @@
 use crate::error::{ModelError, Result};
-use crate::llm::traits::ll_model::{
-    LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage, ToolCall,
-};
-use crate::tool::traits::tool_handler::ToolDefinition;
+use crate::llm::traits::ll_model::{LLMInfo, LLMReply, LLMRequest, LLModel, TokenUsage, ToolCall};
+use crate::tool::traits::tool_definition::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::path::{Path, PathBuf};
 
 pub struct KimiProvider {
@@ -21,7 +18,6 @@ pub struct KimiProvider {
 impl KimiProvider {
     pub fn new(api_key: String, model: Option<String>, llm_log_dir: Option<PathBuf>) -> Self {
         let client = Client::builder()
-            .no_proxy()
             .build()
             .expect("failed to build Kimi HTTP client");
 
@@ -50,11 +46,7 @@ impl KimiProvider {
 
         let kimi_messages: Vec<KimiMessage> = messages
             .iter()
-            .map(|msg| KimiMessage {
-                role: msg.role.clone(),
-                content: Some(msg.content.clone()),
-                tool_calls: None,
-            })
+            .map(KimiMessage::from_llm_request)
             .collect();
 
         let request = KimiRequest {
@@ -96,9 +88,7 @@ impl KimiProvider {
                 .map(|call| ToolCall {
                     id: call.id.clone(),
                     name: call.function.name.clone(),
-                    arguments: serde_json::from_str(&call.function.arguments).unwrap_or_else(
-                        |_| json!({"raw_arguments": call.function.arguments.clone()}),
-                    ),
+                    arguments: parse_tool_call_arguments(&call.function.arguments),
                 })
                 .collect()
         });
@@ -147,7 +137,40 @@ struct KimiMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<KimiToolCall>>,
+}
+
+impl KimiMessage {
+    fn from_llm_request(message: &LLMRequest) -> Self {
+        let content = if message.content.is_empty() {
+            None
+        } else {
+            Some(message.content.clone())
+        };
+
+        Self {
+            role: message.role.clone(),
+            content,
+            name: message.name.clone(),
+            tool_call_id: message.tool_call_id.clone(),
+            tool_calls: message.tool_calls.clone().map(|calls| {
+                calls.into_iter()
+                    .map(|call| KimiToolCall {
+                        id: call.id,
+                        call_type: "function".to_string(),
+                        function: KimiToolCallFunction {
+                            name: call.name,
+                            arguments: call.arguments.to_string(),
+                        },
+                    })
+                    .collect()
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -162,6 +185,11 @@ struct KimiToolCall {
 struct KimiToolCallFunction {
     name: String,
     arguments: String,
+}
+
+fn parse_tool_call_arguments(arguments: &str) -> serde_json::Value {
+    serde_json::from_str(arguments)
+        .unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,22 +218,13 @@ struct KimiUsage {
 
 #[async_trait]
 impl LLModel for KimiProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
-        let mut messages = Vec::new();
-        if let Some(sys) = system_prompt {
-            messages.push(LLMRequest::system(sys));
-        }
-        messages.push(LLMRequest::user(prompt));
-        self.do_chat(&messages, None).await
-    }
-
     async fn do_chat(
         &self,
         messages: &[LLMRequest],
-        tools: Option<&[ToolDefinition]>,
+        available_tools: Option<&[ToolDefinition]>,
     ) -> Result<LLMReply> {
-        let kimi_tools = tools.map(|tools| {
-            tools
+        let kimi_tools = available_tools.map(|available_tools| {
+            available_tools
                 .iter()
                 .map(|tool| KimiTool {
                     tool_type: "function".to_string(),
@@ -233,6 +252,10 @@ impl LLModel for KimiProvider {
             supports_tools: true,
             supports_streaming: false,
         }
+    }
+
+    fn supports_tools(&self) -> bool {
+        true
     }
 }
 
@@ -281,17 +304,31 @@ mod tests {
 
         let kimi_messages: Vec<KimiMessage> = messages
             .iter()
-            .map(|msg| KimiMessage {
-                role: msg.role.clone(),
-                content: Some(msg.content.clone()),
-                tool_calls: None,
-            })
+            .map(KimiMessage::from_llm_request)
             .collect();
 
         assert_eq!(kimi_messages.len(), 3);
         assert_eq!(kimi_messages[0].role, "system");
         assert_eq!(kimi_messages[1].role, "user");
         assert_eq!(kimi_messages[2].role, "assistant");
+    }
+
+    #[test]
+    fn tool_call_argument_fallback_preserves_raw_string() {
+        let parsed = parse_tool_call_arguments("{not-json");
+        assert_eq!(parsed, serde_json::Value::String("{not-json".to_string()));
+    }
+
+    #[test]
+    fn tool_message_conversion_preserves_tool_metadata() {
+        let message = LLMRequest::tool("tool output", "call-1", "shell_command");
+        let kimi_message = KimiMessage::from_llm_request(&message);
+
+        assert_eq!(kimi_message.role, "tool");
+        assert_eq!(kimi_message.content.as_deref(), Some("tool output"));
+        assert_eq!(kimi_message.tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(kimi_message.name.as_deref(), Some("shell_command"));
+        assert!(kimi_message.tool_calls.is_none());
     }
 
     #[tokio::test]
@@ -332,16 +369,16 @@ mod tests {
 
         let provider = KimiProvider::new(api_key, Some("moonshot-v1-8k".to_string()), None);
 
-        let response = provider
-            .complete(
-                "写一个Rust的Hello World程序",
-                Some("你是一个有帮助的编程助手"),
-            )
-            .await;
+        let messages = vec![
+            LLMRequest::system("你是一个有帮助的编程助手"),
+            LLMRequest::user("写一个Rust的Hello World程序"),
+        ];
+
+        let response = provider.do_chat(&messages, None).await;
 
         match response {
             Ok(resp) => {
-                println!("\n✓ Kimi complete call successful!");
+                println!("\n✓ Kimi chat call successful!");
                 println!("  Content length: {}", resp.content.len());
                 println!(
                     "  First 100 chars: {}",

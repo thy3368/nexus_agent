@@ -2,7 +2,7 @@ use crate::error::{ModelError, Result};
 use crate::llm::traits::ll_model::{
     LLMRequest, LLModel, LLMInfo, LLMReply, TokenUsage,
 };
-use crate::tool::traits::tool_handler::ToolDefinition;
+use crate::tool::traits::tool_definition::ToolDefinition;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::json;
@@ -106,19 +106,10 @@ impl MinimaxProvider {
 
 #[async_trait]
 impl LLModel for MinimaxProvider {
-    async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<LLMReply> {
-        let mut messages = Vec::new();
-        if let Some(sys) = system_prompt {
-            messages.push(LLMRequest::system(sys));
-        }
-        messages.push(LLMRequest::user(prompt));
-        self.do_chat(&messages, None).await
-    }
-
     async fn do_chat(
         &self,
         messages: &[LLMRequest],
-        _tools: Option<&[ToolDefinition]>,
+        _available_tools: Option<&[ToolDefinition]>,
     ) -> Result<LLMReply> {
         self.request_chat(messages).await
     }
